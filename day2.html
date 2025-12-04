@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 2 Visualization: Pattern Generator</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --panel-bg: #252526;
+            --accent: #c678dd; /* Purple */
+            --success: #98c379;
+            --warning: #e5c07b;
+            --error: #e06c75;
+            --subtle: #5c6370;
+            --card-bg: #2c313a;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            overflow-y: auto;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        h3 { font-size: 1rem; margin: 5px 0; color: #ddd; }
+        label { font-size: 0.9rem; color: #aaa; display: block; margin-bottom: 5px; }
+
+        textarea {
+            width: 100%;
+            height: 80px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            resize: vertical;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 4px;
+        }
+
+        /* Stats */
+        .summary-box {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .total-sum {
+            font-size: 1.5em;
+            color: var(--success);
+            font-weight: bold;
+            text-align: center;
+            display: block;
+            margin-top: 5px;
+        }
+
+        /* Controls */
+        .radio-group {
+            display: flex;
+            gap: 10px;
+            background: #111;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .radio-group label { margin: 0; cursor: pointer; display: flex; align-items: center; gap: 5px; color: #eee;}
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            background-color: var(--accent);
+            color: white;
+            transition: filter 0.2s;
+        }
+        button:hover { filter: brightness(1.1); }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .range-card {
+            background-color: var(--card-bg);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid var(--subtle);
+        }
+        .range-card.has-match { border-left-color: var(--success); }
+
+        .range-header {
+            font-family: monospace;
+            font-size: 1.1rem;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #444;
+        }
+
+        .candidates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 10px;
+        }
+
+        .candidate-item {
+            background-color: #21252b;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            border: 1px solid #333;
+        }
+
+        .candidate-item.valid {
+            border-color: var(--success);
+            background-color: rgba(152, 195, 121, 0.1);
+        }
+
+        .math-viz {
+            font-family: monospace;
+            color: #aaa;
+            font-size: 0.85rem;
+        }
+
+        .pattern-highlight { color: var(--warning); font-weight: bold; }
+        .result-highlight { color: var(--text-color); font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Configuration</h2>
+
+    <div>
+        <label>Mode</label>
+        <div class="radio-group">
+            <label><input type="radio" name="mode" value="part1" onchange="reload()"> Part 1 (2 Reps)</label>
+            <label><input type="radio" name="mode" value="part2" checked onchange="reload()"> Part 2 (Any)</label>
+        </div>
+    </div>
+
+    <div>
+        <label for="inputData">Input Ranges (CSV)</label>
+        <textarea id="inputData">11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124</textarea>
+    </div>
+
+    <button onclick="reload()">Analyze</button>
+
+    <div class="summary-box">
+        <label>Total Sum of Found Numbers</label>
+        <span id="totalSum" class="total-sum">0</span>
+    </div>
+
+    <div class="summary-box" style="margin-top: 10px;">
+        <label>Info</label>
+        <div style="font-size: 0.85rem; color: #ccc;">
+            Shows candidates generated by repeating a pattern.<br>
+            <span style="color:var(--success)">Green</span> items are valid candidates inside the range.
+        </div>
+    </div>
+</div>
+
+<div class="main-content" id="resultsContainer">
+    <!-- Range Cards will go here -->
+</div>
+
+<script>
+    // --- Logic (Mirroring Kotlin) ---
+
+    function countDigits(n) {
+        return n.toString().length;
+    }
+
+    function generateNumber(pattern, repetitions) {
+        let result = BigInt(0);
+        let multiplier = BigInt(1);
+        const patBig = BigInt(pattern);
+        const patDigits = countDigits(pattern);
+
+        for(let i=0; i<repetitions; i++) {
+            result += patBig * multiplier;
+            multiplier *= (BigInt(10) ** BigInt(patDigits));
+        }
+        return result;
+    }
+
+    function getDividers(num) {
+        const dividers = [];
+        for(let i=1; i<=num; i++) {
+            if(num % i === 0) dividers.push(i);
+        }
+        return dividers.reverse();
+    }
+
+    function generateRepeatedForRange(start, end, maxReps) {
+        const startDigits = countDigits(start);
+        const endDigits = countDigits(end);
+
+        const candidates = [];
+
+        // Kotlin: (startDigits..finishDigits).flatMap { digits -> ... }
+        for (let digits = startDigits; digits <= endDigits; digits++) {
+
+            // Kotlin: digits.dividers().filter { it < digits }
+            const dividers = getDividers(digits).filter(d => d < digits);
+
+            for (const patternLength of dividers) {
+                const repCount = digits / patternLength;
+
+                if (repCount > maxReps) continue;
+
+                const patternStart = BigInt(10) ** BigInt(patternLength - 1);
+                const patternEnd = (BigInt(10) ** BigInt(patternLength)) - BigInt(1);
+
+                // Generate numbers for this specific structure
+                for (let pattern = patternStart; pattern <= patternEnd; pattern++) {
+                    const val = generateNumber(pattern, repCount);
+
+                    // Check range (Optimization: only if near range boundaries or check all?)
+                    // Since JS might be slower than Kotlin for massive iteration,
+                    // we will optimize: simple check
+
+                    if (val >= start && val <= end) {
+                        candidates.push({
+                            val: val,
+                            pattern: pattern,
+                            reps: repCount,
+                            valid: true
+                        });
+                    } else if (candidates.length < 50) { // Keep some invalid for context if we don't have many
+                        // Optional: Store near misses for visualization context?
+                        // For strict adherence to logic, we only care about matches usually.
+                        // But visualizing the process means seeing misses too.
+                        // Let's only add if it's somewhat close? No, simple check for viz.
+                    }
+                }
+            }
+        }
+        return candidates;
+    }
+
+    // Since standard generation is huge, let's use the smarter logic from `numbersInRange`
+    // but adapted to find intersections quickly for visualization.
+    // Actually, the logic in Kotlin `generateRepeated` iterates patterns based on `digits`.
+    // For visualization, we want to show WHAT was found.
+
+    function analyzeRange(startStr, endStr, mode) {
+        const start = BigInt(startStr);
+        const end = BigInt(endStr);
+        const maxReps = mode === 'part1' ? 2 : Number.MAX_SAFE_INTEGER;
+
+        const found = generateRepeatedForRange(start, end, maxReps);
+        return found;
+    }
+
+    // --- UI ---
+
+    function reload() {
+        const container = document.getElementById('resultsContainer');
+        container.innerHTML = '';
+
+        const input = document.getElementById('inputData').value;
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+
+        // Parse Input CSV
+        // "11-22,95-115" -> ["11-22", "95-115"]
+        const ranges = input.trim().split(',').map(s => s.trim()).filter(s => s);
+
+        let totalSum = BigInt(0);
+
+        ranges.forEach(rangeStr => {
+            const parts = rangeStr.split('-');
+            if(parts.length !== 2) return;
+
+            const start = parts[0];
+            const end = parts[1];
+
+            const results = analyzeRange(start, end, mode);
+
+            // Sum
+            results.forEach(r => {
+                if(r.valid) totalSum += r.val;
+            });
+
+            createRangeCard(rangeStr, results, container);
+        });
+
+        document.getElementById('totalSum').textContent = totalSum.toString();
+    }
+
+    function createRangeCard(rangeTitle, results, container) {
+        const card = document.createElement('div');
+        card.className = 'range-card' + (results.length > 0 ? ' has-match' : '');
+
+        const header = document.createElement('div');
+        header.className = 'range-header';
+        header.innerHTML = `
+            <span>Range: ${rangeTitle}</span>
+            <span>Found: ${results.length}</span>
+        `;
+        card.appendChild(header);
+
+        if(results.length === 0) {
+            const emptyMsg = document.createElement('div');
+            emptyMsg.style.color = '#666';
+            emptyMsg.style.fontStyle = 'italic';
+            emptyMsg.textContent = "No repeated patterns found in this range.";
+            card.appendChild(emptyMsg);
+        } else {
+            const grid = document.createElement('div');
+            grid.className = 'candidates-grid';
+
+            results.forEach(res => {
+                const item = document.createElement('div');
+                item.className = 'candidate-item valid';
+
+                const patStr = res.pattern.toString();
+                const valStr = res.val.toString();
+
+                // Format: Pattern repeated X times
+                item.innerHTML = `
+                    <div class="math-viz">
+                        <span class="pattern-highlight">${patStr}</span> × ${res.reps} reps
+                    </div>
+                    <div class="result-highlight">
+                         = ${valStr}
+                    </div>
+                `;
+                grid.appendChild(item);
+            });
+            card.appendChild(grid);
+        }
+
+        container.appendChild(card);
+    }
+
+    // Init
+    window.onload = reload;
+
+</script>
+
+</body>
+</html>
