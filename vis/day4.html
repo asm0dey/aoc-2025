@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Part 2 Visualization: Erosion Simulation</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --panel-bg: #252526;
+            --accent: #4caf50;
+            --danger: #f44336;
+            --grid-line: #333;
+            --cell-active: #61afef;
+            --cell-dying: #e06c75;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar for controls */
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            resize: vertical;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        .stats-panel {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .stat-val { font-weight: bold; font-family: monospace; }
+        .val-removed { color: var(--accent); font-size: 1.1em; }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .btn-primary { background-color: var(--accent); color: white; }
+        .btn-primary:hover { background-color: #43a047; }
+        
+        .btn-secondary { background-color: #444; color: white; }
+        .btn-secondary:hover { background-color: #555; }
+
+        .btn-danger { background-color: var(--danger); color: white; }
+        .btn-danger:hover { background-color: #d32f2f; }
+
+        /* Main Canvas Area */
+        .main-content {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #111;
+        }
+
+        canvas {
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            image-rendering: pixelated; /* Crisp pixels */
+        }
+        
+        .legend {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: auto;
+        }
+        .legend span { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Input Data</h2>
+    <textarea id="inputData" placeholder="Paste your grid here... (lines with @)">
+....@....
+...@.@...
+..@...@..
+...@.@...
+....@....
+    </textarea>
+    <button class="btn-secondary" onclick="loadData()">Load Input</button>
+
+    <h2>Simulation</h2>
+    <div class="stats-panel">
+        <div class="stat-row"><span>Initial Count:</span> <span id="initCount" class="stat-val">0</span></div>
+        <div class="stat-row"><span>Current Count:</span> <span id="currCount" class="stat-val">0</span></div>
+        <div class="stat-row"><span>Removed (Part 2):</span> <span id="removedCount" class="stat-val val-removed">0</span></div>
+        <div class="stat-row"><span>Step:</span> <span id="stepCount" class="stat-val">0</span></div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-primary" id="btnStep" onclick="stepSimulation()" disabled>Step</button>
+        <button class="btn-primary" id="btnRun" onclick="toggleAutoRun()" disabled>Run Auto</button>
+        <button class="btn-danger" onclick="resetSim()">Reset</button>
+    </div>
+    
+    <div class="legend">
+        <div><span style="background:var(--cell-active)"></span> Active Cell</div>
+        <div><span style="background:var(--cell-dying)"></span> Removing (Neighbors < 4)</div>
+    </div>
+</div>
+
+<div class="main-content" id="canvasContainer">
+    <canvas id="simCanvas"></canvas>
+</div>
+
+<script>
+    // --- Logic ---
+
+    let activePoints = new Set(); // Strings "x,y"
+    let dyingPoints = new Set();  // Strings "x,y" for visualization
+    let initialSize = 0;
+    let steps = 0;
+    
+    // Parsing
+    function parseInput(text) {
+        const points = new Set();
+        const lines = text.trim().split('\n');
+        lines.forEach((row, rowIndex) => {
+            for (let colIndex = 0; colIndex < row.length; colIndex++) {
+                if (row[colIndex] === '@') {
+                    points.add(`${colIndex},${rowIndex}`);
+                }
+            }
+        });
+        return points;
+    }
+
+    // Neighbors Logic (Moore Neighborhood)
+    function getNeighborCount(key, set) {
+        const [x, y] = key.split(',').map(Number);
+        let count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                const neighborKey = `${x + dx},${y + dy}`;
+                if (set.has(neighborKey)) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    // Simulation Step
+    // Note: The Kotlin code uses `removeIf` on a MutableSet. 
+    // This implies sequential modification if looking at Iterator implementation, 
+    // OR simultaneous update if treating it as a generational CA rule.
+    // We implement Simultaneous (Snapshot) updates here as it's standard for visualizations 
+    // and allows showing "dying" cells.
+    function calculateNextStep() {
+        const toRemove = new Set();
+        
+        // Check every active point
+        for (const key of activePoints) {
+            if (getNeighborCount(key, activePoints) < 4) {
+                toRemove.add(key);
+            }
+        }
+        return toRemove;
+    }
+
+    // --- Visualization & UI ---
+
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    let animationId = null;
+    let isRunning = false;
+    let canvasScale = 10;
+    let gridBounds = { minX: 0, maxX: 10, minY: 0, maxY: 10 };
+
+    function loadData() {
+        const text = document.getElementById('inputData').value;
+        activePoints = parseInput(text);
+        dyingPoints.clear();
+        initialSize = activePoints.size;
+        steps = 0;
+        
+        updateStats();
+        fitCanvas();
+        draw();
+        
+        document.getElementById('btnStep').disabled = false;
+        document.getElementById('btnRun').disabled = false;
+        document.getElementById('btnRun').innerText = "Run Auto";
+        isRunning = false;
+        if(animationId) cancelAnimationFrame(animationId);
+    }
+
+    function fitCanvas() {
+        if (activePoints.size === 0) return;
+
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const key of activePoints) {
+            const [x, y] = key.split(',').map(Number);
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+
+        // Add padding
+        const padding = 2;
+        gridBounds = { 
+            minX: minX - padding, 
+            maxX: maxX + padding, 
+            minY: minY - padding, 
+            maxY: maxY + padding 
+        };
+
+        const width = gridBounds.maxX - gridBounds.minX;
+        const height = gridBounds.maxY - gridBounds.minY;
+
+        // Auto-scale based on container size
+        const container = document.getElementById('canvasContainer');
+        const availW = container.clientWidth - 40;
+        const availH = container.clientHeight - 40;
+        
+        const scaleX = availW / width;
+        const scaleY = availH / height;
+        canvasScale = Math.min(Math.floor(Math.min(scaleX, scaleY)), 20); // Max zoom 20
+        canvasScale = Math.max(canvasScale, 2); // Min zoom 2
+
+        canvas.width = width * canvasScale;
+        canvas.height = height * canvasScale;
+        
+        draw();
+    }
+
+    function draw() {
+        // Clear
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Active
+        ctx.fillStyle = '#61afef'; // Blue
+        for (const key of activePoints) {
+            // If it's marked for death, skip drawing here (drawn red later) OR draw under?
+            // Let's draw normal first.
+            if (!dyingPoints.has(key)) {
+                drawCell(key);
+            }
+        }
+
+        // Draw Dying
+        ctx.fillStyle = '#e06c75'; // Red
+        for (const key of dyingPoints) {
+            drawCell(key);
+        }
+    }
+
+    function drawCell(key) {
+        const [x, y] = key.split(',').map(Number);
+        // Transform to canvas coords
+        const cx = (x - gridBounds.minX) * canvasScale;
+        const cy = (y - gridBounds.minY) * canvasScale;
+        // Draw with slight gap
+        const gap = Math.max(1, canvasScale * 0.1);
+        ctx.fillRect(cx, cy, canvasScale - gap, canvasScale - gap);
+    }
+
+    function updateStats() {
+        document.getElementById('initCount').textContent = initialSize;
+        document.getElementById('currCount').textContent = activePoints.size;
+        document.getElementById('removedCount').textContent = initialSize - activePoints.size;
+        document.getElementById('stepCount').textContent = steps;
+    }
+
+    function stepSimulation() {
+        // If we have dying points highlighted, remove them now (Phase 2 of step)
+        if (dyingPoints.size > 0) {
+            for (const key of dyingPoints) {
+                activePoints.delete(key);
+            }
+            dyingPoints.clear();
+            steps++;
+            updateStats();
+            draw();
+            return true; // Continue running
+        } 
+        
+        // Otherwise calculate next batch to die (Phase 1 of step)
+        const toDie = calculateNextStep();
+        
+        if (toDie.size === 0) {
+            // Stable
+            if (isRunning) toggleAutoRun(); // Stop
+            return false; 
+        }
+
+        // Highlight them
+        dyingPoints = toDie;
+        draw();
+        return true;
+    }
+
+    function toggleAutoRun() {
+        const btn = document.getElementById('btnRun');
+        if (isRunning) {
+            isRunning = false;
+            btn.innerText = "Run Auto";
+            cancelAnimationFrame(animationId);
+        } else {
+            if (activePoints.size === 0 && dyingPoints.size === 0) return;
+            isRunning = true;
+            btn.innerText = "Stop";
+            lastFrameTime = 0;
+            requestAnimationFrame(gameLoop);
+        }
+    }
+
+    let lastFrameTime = 0;
+    const FPS = 10; // Adjust speed here
+
+    function gameLoop(timestamp) {
+        if (!isRunning) return;
+
+        if (timestamp - lastFrameTime > (1000 / FPS)) {
+            const hasWork = stepSimulation();
+            if (!hasWork) return; 
+            lastFrameTime = timestamp;
+        }
+        animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function resetSim() {
+        loadData();
+    }
+
+    // Initial load for demo
+    window.onload = () => {
+        loadData();
+    };
+
+    // Handle resize
+    window.onresize = () => {
+        if (activePoints.size > 0) {
+             fitCanvas();
+        }
+    };
+
+</script>
+</body>
+</html>

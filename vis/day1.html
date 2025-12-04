@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 1 Visualization: Circular Track</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --panel-bg: #252526;
+            --accent: #61afef; /* Blue */
+            --highlight: #e5c07b; /* Gold/Yellow */
+            --danger: #e06c75;
+            --track-color: #333;
+            --cursor-color: #98c379; /* Green */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        label { font-size: 0.9rem; color: #aaa; display: block; margin-bottom: 5px; }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            resize: vertical;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        /* Stats Panel */
+        .stats-panel {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        .stat-val { font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .val-p1 { color: var(--accent); }
+        .val-p2 { color: var(--highlight); }
+        .current-inst { color: #fff; background: #444; padding: 2px 6px; border-radius: 3px; }
+
+        /* Controls */
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: filter 0.2s;
+            color: white;
+        }
+
+        .btn-primary { background-color: var(--accent); }
+        .btn-secondary { background-color: #444; }
+        .btn-danger { background-color: var(--danger); }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { filter: brightness(0.5); cursor: not-allowed; }
+
+        /* Main Canvas */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background: radial-gradient(circle at center, #222 0%, #111 100%);
+        }
+
+        canvas {
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            border-radius: 50%;
+        }
+
+        .overlay-text {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+            color: #666;
+            font-size: 0.8rem;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Day 1: Circular Track</h2>
+
+    <div>
+        <label for="inputData">Commands (L/R + Value)</label>
+        <textarea id="inputData" placeholder="L50&#10;R20...">
+L68
+L30
+R48
+L5
+R60
+L55
+L1
+L99
+R14
+L82
+        </textarea>
+        <button class="btn-secondary" style="width:100%; margin-top:5px;" onclick="loadData()">Load Instructions</button>
+    </div>
+
+    <div class="stats-panel">
+        <div class="stat-row">
+            <span>Current Pos:</span>
+            <span id="uiPos" class="stat-val">50</span>
+        </div>
+        <div class="stat-row">
+            <span>Instruction:</span>
+            <span id="uiInst" class="stat-val current-inst">-</span>
+        </div>
+        <hr style="border-color:#444; opacity:0.5">
+        <div class="stat-row">
+            <span>Landings on 0 (P1):</span>
+            <span id="uiP1" class="stat-val val-p1">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Passes of 0 (P2):</span>
+            <span id="uiP2" class="stat-val val-p2">0</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-primary" id="btnStep" onclick="step()" disabled>Step</button>
+        <button class="btn-primary" id="btnRun" onclick="toggleRun()" disabled>Run Auto</button>
+        <button class="btn-danger" onclick="reset()">Reset</button>
+    </div>
+
+    <div>
+        <label>Speed</label>
+        <input type="range" id="speedRange" min="1" max="20" value="5" style="width:100%">
+    </div>
+</div>
+
+<div class="main-content">
+    <canvas id="trackCanvas" width="600" height="600"></canvas>
+    <div class="overlay-text">
+        Positions: 0-99<br>
+        Start: 50
+    </div>
+</div>
+
+<script>
+    // --- Logic ---
+    let commands = [];
+    let cmdIndex = 0;
+
+    // State
+    let currentPos = 50;
+    let p1Counter = 0;
+    let p2Counter = 0;
+
+    // Animation State
+    let isAnimating = false;
+    let isAutoRunning = false;
+    let animProgress = 0; // 0 to 1
+    let animStartPos = 50;
+    let animTargetPos = 50; // Absolute target before mod
+    let animDirection = 1; // 1 or -1
+    let currentCmdVal = 0;
+
+    // Canvas
+    const canvas = document.getElementById('trackCanvas');
+    const ctx = canvas.getContext('2d');
+    const CX = 300;
+    const CY = 300;
+    const RADIUS = 250;
+
+    // Helper: Math.sign polyfill/usage
+    const sign = (x) => x > 0 ? 1 : (x < 0 ? -1 : 0);
+
+    function parseInput(text) {
+        return text.trim().split(/\s+/).map(s => {
+            if(!s) return null;
+            const dirStr = s.charAt(0).toUpperCase();
+            const val = parseInt(s.substring(1));
+            return {
+                raw: s,
+                dir: (dirStr === 'R' ? 1 : -1), // R=1, L=-1
+                val: val
+            };
+        }).filter(x => x);
+    }
+
+    // --- drawing ---
+
+    function draw() {
+        // Clear
+        ctx.fillStyle = '#1e1e1e'; // Match bg to avoid artifacts if any
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Track
+        ctx.beginPath();
+        ctx.arc(CX, CY, RADIUS, 0, Math.PI * 2);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 20;
+        ctx.stroke();
+
+        // Draw Ticks
+        for(let i=0; i<100; i++) {
+            const angle = (i / 100) * Math.PI * 2 - (Math.PI / 2); // Start at top
+            const isZero = i === 0;
+
+            const rIn = isZero ? RADIUS - 20 : RADIUS - 10;
+            const rOut = isZero ? RADIUS + 20 : RADIUS + 10;
+
+            const x1 = CX + Math.cos(angle) * rIn;
+            const y1 = CY + Math.sin(angle) * rIn;
+            const x2 = CX + Math.cos(angle) * rOut;
+            const y2 = CY + Math.sin(angle) * rOut;
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = isZero ? '#e5c07b' : '#555';
+            ctx.lineWidth = isZero ? 4 : 1;
+            ctx.stroke();
+
+            // Label for 0, 25, 50, 75
+            if(i % 25 === 0) {
+                const rText = RADIUS + 40;
+                const tx = CX + Math.cos(angle) * rText;
+                const ty = CY + Math.sin(angle) * rText;
+                ctx.fillStyle = '#888';
+                ctx.font = '14px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i.toString(), tx, ty);
+            }
+        }
+
+        // Calculate current visual position
+        // We interpolate linearly based on absolute distance
+        let visualPosVal;
+        if (isAnimating) {
+            const dist = Math.abs(animTargetPos - animStartPos); // e.g. 60
+            const currentDist = dist * animProgress;
+            const rawPos = animStartPos + (currentDist * animDirection);
+            // Normalize for display (0-99.99)
+            visualPosVal = ((rawPos % 100) + 100) % 100;
+        } else {
+            visualPosVal = currentPos;
+        }
+
+        // Draw Cursor
+        const cursorAngle = (visualPosVal / 100) * Math.PI * 2 - (Math.PI / 2);
+
+        // Cursor Glow
+        const glowX = CX + Math.cos(cursorAngle) * RADIUS;
+        const glowY = CY + Math.sin(cursorAngle) * RADIUS;
+
+        const grad = ctx.createRadialGradient(glowX, glowY, 5, glowX, glowY, 30);
+        grad.addColorStop(0, 'rgba(152, 195, 121, 1)');
+        grad.addColorStop(1, 'rgba(152, 195, 121, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(glowX, glowY, 30, 0, Math.PI*2);
+        ctx.fill();
+
+        // Cursor Dot
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(glowX, glowY, 6, 0, Math.PI*2);
+        ctx.fill();
+
+        // Center Text
+        ctx.fillStyle = '#ddd';
+        ctx.font = 'bold 24px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(Math.round(visualPosVal).toString(), CX, CY);
+        ctx.font = '14px sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.fillText("POS", CX, CY + 20);
+    }
+
+    // --- Logic Execution ---
+
+    function loadData() {
+        const txt = document.getElementById('inputData').value;
+        commands = parseInput(txt);
+        reset();
+        document.getElementById('btnStep').disabled = false;
+        document.getElementById('btnRun').disabled = false;
+    }
+
+    function reset() {
+        cmdIndex = 0;
+        currentPos = 50;
+        p1Counter = 0;
+        p2Counter = 0;
+        isAnimating = false;
+        isAutoRunning = false;
+        cancelAnimationFrame(reqId);
+        updateUI();
+        draw();
+    }
+
+    function updateUI() {
+        document.getElementById('uiPos').textContent = currentPos;
+        document.getElementById('uiInst').textContent =
+            (cmdIndex < commands.length) ? commands[cmdIndex].raw : "DONE";
+
+        document.getElementById('uiP1').textContent = p1Counter;
+        document.getElementById('uiP2').textContent = p2Counter;
+
+        if (isAutoRunning) {
+            document.getElementById('btnRun').textContent = "Stop";
+            document.getElementById('btnRun').classList.add('btn-danger');
+        } else {
+            document.getElementById('btnRun').textContent = "Run Auto";
+            document.getElementById('btnRun').classList.remove('btn-danger');
+        }
+    }
+
+    function processLogicStep(cmd) {
+        // Part 2 Calculation (Before modifying absolute pos in a normalized way)
+        // Wait, Kotlin logic keeps 'absolutePos' un-normalized during the calc
+        // let's replicate the Kotlin math exactly.
+
+        // Note: `currentPos` here acts as the starting `absolutePos` for the Kotlin loop,
+        // but since Kotlin resets it to 0-99 at end of loop, `currentPos` is always 0-99.
+
+        const prevPos = currentPos;
+        const value = cmd.val;
+        const dir = cmd.dir; // 1 or -1
+
+        // Calculate new absolute pos
+        const absolutePos = prevPos + (value * dir);
+
+        // Part 2 Math
+        let passesAdded = 0;
+        if (dir > 0) {
+            passesAdded = Math.floor(absolutePos / 100);
+        } else {
+            // prevPos.sign - 1 - (absolutePos - 1).floorDiv(100)
+            const signVal = prevPos === 0 ? 0 : (prevPos > 0 ? 1 : -1);
+            const term2 = Math.floor((absolutePos - 1) / 100);
+            passesAdded = signVal - 1 - term2;
+        }
+        p2Counter += passesAdded;
+
+        // Update Position (Normalize)
+        currentPos = ((absolutePos % 100) + 100) % 100;
+
+        // Part 1 Check
+        if (currentPos === 0) {
+            p1Counter++;
+        }
+    }
+
+    function step() {
+        if (isAnimating) return; // Wait for finish
+        if (cmdIndex >= commands.length) return;
+
+        const cmd = commands[cmdIndex];
+
+        // Setup Animation
+        isAnimating = true;
+        animStartPos = currentPos; // 0-99
+        animDirection = cmd.dir;
+        animTargetPos = currentPos + (cmd.val * cmd.dir); // Absolute
+        animProgress = 0;
+
+        // We run the logic *after* animation finishes to update counters?
+        // Or we can compute target now.
+        // Let's run logic now but update UI after animation?
+        // No, better to run logic after to keep state consistent visually.
+
+        requestAnimationFrame(animateLoop);
+    }
+
+    let reqId;
+    function animateLoop() {
+        const speedVal = parseInt(document.getElementById('speedRange').value);
+        const speed = 0.005 * speedVal; // Adjust speed factor
+
+        animProgress += speed;
+
+        if (animProgress >= 1) {
+            animProgress = 1;
+            isAnimating = false;
+
+            // Finalize Step
+            processLogicStep(commands[cmdIndex]);
+            cmdIndex++;
+            updateUI();
+            draw();
+
+            if (isAutoRunning) {
+                if (cmdIndex < commands.length) {
+                    // Small delay or immediate
+                    setTimeout(step, 50);
+                } else {
+                    toggleRun(); // Stop
+                }
+            }
+        } else {
+            draw();
+            reqId = requestAnimationFrame(animateLoop);
+        }
+    }
+
+    function toggleRun() {
+        if (isAutoRunning) {
+            isAutoRunning = false;
+            updateUI();
+        } else {
+            isAutoRunning = true;
+            updateUI();
+            step();
+        }
+    }
+
+    // Init
+    window.onload = () => {
+        reset();
+    };
+
+</script>
+</body>
+</html>
