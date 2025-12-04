@@ -138,30 +138,38 @@
             font-size: 1.2rem;
             font-weight: bold;
             border-radius: 4px;
-            transition: all 0.1s ease; /* Faster transition */
+            /* Smoother, specific transitions */
+            transition: background-color 0.2s ease,
+                        color 0.2s ease,
+                        transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), /* Bouncy pop */
+                        border-color 0.2s ease,
+                        opacity 0.2s ease;
             position: relative;
+            will-change: transform, background-color;
         }
 
         /* States */
         .in-window {
             border-color: var(--highlight);
-            background-color: rgba(97, 175, 239, 0.1);
-            box-shadow: 0 0 10px rgba(97, 175, 239, 0.2);
+            background-color: rgba(97, 175, 239, 0.15);
+            box-shadow: 0 0 10px rgba(97, 175, 239, 0.1);
         }
-
+        
         .selected {
             background-color: var(--selected);
             color: #111;
-            transform: scale(1.1);
+            transform: scale(1.25); /* Larger pop */
             z-index: 10;
             border-color: #fff;
-            box-shadow: 0 0 15px var(--selected);
+            box-shadow: 0 0 20px var(--selected);
         }
 
         .discarded {
-            background-color: #111;
-            color: #333; /* Very dim */
-            border-color: #222;
+            background-color: #161616;
+            color: #333; 
+            border-color: transparent;
+            transform: scale(0.85); /* Shrink away */
+            opacity: 0.7;
         }
 
         .future {
@@ -443,37 +451,49 @@
         uiVal.textContent = state.maxVal !== undefined ? state.maxVal : "-";
 
         // Apply classes to existing cells
+        // We use a requestAnimationFrame to batch style updates if needed, but direct update is fine here
         currentOriginalDigits.forEach((_, i) => {
             const cell = document.getElementById(`cell-${i}`);
-            // Reset
-            cell.className = 'digit-cell';
+            // Reset base class (keeping transitions)
+            let newClass = 'digit-cell';
 
             if (i < state.globalOffset) {
-                // Discarded / Past
-                cell.classList.add('discarded');
+                newClass += ' discarded';
             } else {
-                // Future / Current
-
                 if (state.type === 'selection') {
                     if (i <= state.windowEnd) {
-                        cell.classList.add('in-window');
+                        newClass += ' in-window';
                     } else {
-                        cell.classList.add('future');
+                        newClass += ' future';
                     }
 
                     if (i === state.bestIndex) {
-                        cell.classList.add('selected');
+                        newClass += ' selected';
                     }
                 } else if (state.type === 'cut') {
-                    // Just waiting state
-                    cell.classList.add('future');
+                    newClass += ' future';
                 } else if (state.type === 'finished') {
-                    cell.classList.add('discarded');
+                    newClass += ' discarded';
                 } else {
-                    cell.classList.add('future');
+                    newClass += ' future';
                 }
             }
+            
+            // Only change className if different to prevent transition interrupts/recalc
+            if(cell.className !== newClass) {
+                cell.className = newClass;
+            }
         });
+
+        // Auto-scroll to keep action in view
+        if(isRunning && (state.type === 'selection' || state.type === 'cut')) {
+            const focusIndex = state.globalOffset;
+            const cell = document.getElementById(`cell-${focusIndex}`);
+            if (cell) {
+                // Smooth scroll to center
+                cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
     }
 
     // --- Loop Control ---
@@ -514,7 +534,7 @@
             autoTimer = setInterval(() => {
                 const keepGoing = step();
                 if(!keepGoing) stopAuto();
-            }, 150);
+            }, 100);
         }
     }
 
