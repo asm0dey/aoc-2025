@@ -1,0 +1,23 @@
+name: Deploy HTML to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate directory indexes
+        uses: gacts/directory-listing@v1
+        with:
+          target: ./vis  # Replace with your HTML directory
+          overwrite: true       # Overwrite existing index.html if needed
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./vis
