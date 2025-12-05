@@ -5,13 +5,12 @@ fun main() {
         return ingredients.count { ing -> lists.any { it.contains(ing) } }
     }
 
-    operator fun LongRange.minus(other: LongRange): List<LongRange> {
-        return if (other.first in this && other.last in this) listOf(this.first..<other.first, other.last+1..this.last)
+    operator fun LongRange.minus(other: LongRange): List<LongRange> =
+        if (other.first in this && other.last in this) listOf(this.first..<other.first, other.last + 1..this.last)
         else if (this.first in other && this.last in other) listOf()
         else if (other.first in this) listOf(this.first..<other.first)
-        else if (other.last in this) listOf(other.last+1..this.last)
+        else if (other.last in this) listOf(other.last + 1..this.last)
         else listOf(this)
-    }
 
     operator fun List<LongRange>.minus(other: LongRange): List<LongRange> = this.flatMap { it - other }
 
