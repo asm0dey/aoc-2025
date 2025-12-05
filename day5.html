@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 5: Ranges (Text Mode)</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-bg: #252526;
+            --text-color: #e0e0e0;
+            --accent: #61afef; /* Blue */
+            --subtractor: #e06c75; /* Red */
+            --success: #98c379; /* Green */
+            --highlight: #e5c07b; /* Yellow */
+            --muted: #5c6370;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        h2 { margin: 0; color: var(--accent); }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            padding: 10px;
+            resize: vertical;
+        }
+
+        .tabs {
+            display: flex;
+            border: 1px solid #444;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            background: #2a2a2a;
+            color: #888;
+            transition: background 0.2s;
+        }
+        .tab.active {
+            background: var(--accent);
+            color: #1e1e1e;
+            font-weight: bold;
+        }
+
+        .stats-box {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .stat-val { font-family: monospace; font-weight: bold; color: var(--highlight); }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            background-color: #444;
+        }
+        button.primary { background-color: var(--accent); }
+        button.danger { background-color: var(--subtractor); }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Main Area */
+        .main-display {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            gap: 40px;
+        }
+
+        /* Cards for visualization */
+        .card {
+            background: #2b2b2b;
+            border-radius: 12px;
+            padding: 30px;
+            width: 80%;
+            max-width: 800px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+            border: 1px solid #444;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .card-label {
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            color: #777;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+
+        .card-content {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 2.5rem;
+            font-weight: bold;
+            word-wrap: break-word;
+        }
+
+        .range-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .range-item {
+            background: rgba(0,0,0,0.2);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid #444;
+        }
+
+        .primary-content { color: var(--accent); }
+        .secondary-content { color: var(--subtractor); }
+        .success-content { color: var(--success); }
+        .muted-content { color: var(--muted); }
+
+        .status-message {
+            font-size: 1.2rem;
+            color: #aaa;
+            height: 30px;
+        }
+
+        /* Animations */
+        .pulse { animation: pulse 0.5s ease-in-out; }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Day 5: Text Vis</h2>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchMode(2)">Part 2 (Ranges)</div>
+        <div class="tab" onclick="switchMode(1)">Part 1 (Points)</div>
+    </div>
+
+    <div class="control-group">
+        <label>Input Data</label>
+        <textarea id="inputData">
+3-5
+10-14
+16-20
+12-18
+
+1
+5
+8
+11
+17
+32
+</textarea>
+        <button onclick="parseAndReset()">Load Data</button>
+    </div>
+
+    <div class="stats-box">
+        <div class="stat-row">
+            <span>Part 1 Found:</span>
+            <span id="p1Stat" class="stat-val">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Part 2 Sum:</span>
+            <span id="p2Stat" class="stat-val">0</span>
+        </div>
+    </div>
+
+    <div class="control-group" style="margin-top: auto;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+            <button class="primary" id="btnStep" onclick="step()">Step</button>
+            <button class="primary" id="btnRun" onclick="toggleRun()">Run</button>
+        </div>
+        <button class="danger" onclick="parseAndReset()">Reset</button>
+        <label>Speed</label>
+        <input type="range" id="speedRange" min="1" max="50" value="5">
+    </div>
+</div>
+
+<div class="main-display">
+
+    <!-- TOP CARD: Current Subject -->
+    <div class="card" id="cardTop">
+        <div class="card-label" id="labelTop">Current Subject</div>
+        <div class="card-content primary-content" id="contentTop">...</div>
+    </div>
+
+    <!-- STATUS / ACTION -->
+    <div class="status-message" id="statusMsg">Ready</div>
+
+    <!-- BOTTOM CARD: Comparison -->
+    <div class="card" id="cardBot">
+        <div class="card-label" id="labelBot">Comparing Against</div>
+        <div class="card-content secondary-content" id="contentBot">...</div>
+    </div>
+
+</div>
+
+<script>
+    // --- State ---
+    let mode = 2; // 1 or 2
+    let ranges = []; // list of {start, end}
+    let ingredients = []; // list of numbers
+
+    // P1 State
+    let p1_ingIdx = 0;
+    let p1_rangeIdx = 0;
+    let p1_foundCount = 0;
+
+    // P2 State
+    let p2_outerIdx = 0;
+    let p2_innerIdx = 0;
+    let p2_fragments = []; // List of ranges currently held
+    let p2_totalSum = 0;
+
+    // Run State
+    let isAutoRunning = false;
+    let runTimer = null;
+    let isDone = false;
+
+    function parseInput() {
+        const txt = document.getElementById('inputData').value;
+        const lines = txt.split('\n').map(x => x.trim()).filter(x => x);
+
+        ranges = [];
+        ingredients = [];
+
+        lines.forEach(line => {
+            if (line.includes('-')) {
+                const parts = line.split('-');
+                ranges.push({
+                    start: parseInt(parts[0]),
+                    end: parseInt(parts[1])
+                });
+            } else {
+                const v = parseInt(line);
+                if (!isNaN(v)) ingredients.push(v);
+            }
+        });
+    }
+
+    function switchMode(m) {
+        mode = m;
+        document.querySelectorAll('.tab').forEach((t, i) => {
+            if ((m===2 && i===0) || (m===1 && i===1)) t.classList.add('active');
+            else t.classList.remove('active');
+        });
+        parseAndReset();
+    }
+
+    function parseAndReset() {
+        parseInput();
+
+        isAutoRunning = false;
+        clearTimeout(runTimer);
+        isDone = false;
+
+        // Reset P1
+        p1_ingIdx = 0;
+        p1_rangeIdx = 0;
+        p1_foundCount = 0;
+
+        // Reset P2
+        p2_outerIdx = 0;
+        p2_innerIdx = 0;
+        p2_fragments = [];
+        p2_totalSum = 0;
+
+        updateStats();
+        renderInit();
+        updateButtonState();
+    }
+
+    // --- Logic ---
+
+    function step() {
+        if (isDone) return;
+
+        if (mode === 1) stepP1();
+        else stepP2();
+
+        updateStats();
+        updateButtonState();
+    }
+
+    function stepP1() {
+        if (p1_ingIdx >= ingredients.length) {
+            finish("Part 1 Complete");
+            return;
+        }
+
+        const point = ingredients[p1_ingIdx];
+
+        // Display current state
+        renderP1(point, ranges[p1_rangeIdx]);
+
+        // Logic Check
+        const range = ranges[p1_rangeIdx];
+
+        if (point >= range.start && point <= range.end) {
+            // MATCH!
+            p1_foundCount++;
+            setStatus(`Matched in range [${range.start}..${range.end}]!`, 'success-content');
+            flashTop('success-content');
+
+            // Move to next ingredient immediately
+            p1_ingIdx++;
+            p1_rangeIdx = 0;
+        } else {
+            // NO MATCH
+            setStatus(`Checking...`, 'muted-content');
+
+            // Advance range
+            p1_rangeIdx++;
+            if (p1_rangeIdx >= ranges.length) {
+                // End of ranges for this point, move next point
+                p1_ingIdx++;
+                p1_rangeIdx = 0;
+            }
+        }
+    }
+
+    function stepP2() {
+        if (p2_outerIdx >= ranges.length) {
+            finish("Part 2 Complete");
+            return;
+        }
+
+        // Initial Load of a new outer range
+        if (p2_fragments.length === 0 && p2_innerIdx === 0) {
+            p2_fragments = [ranges[p2_outerIdx]];
+            p2_innerIdx = p2_outerIdx + 1; // Start comparing with next one
+
+            renderP2(p2_fragments, null);
+            setStatus(`Picked new source range`, 'primary-content');
+            return; // Visual pause
+        }
+
+        // If we exhausted inner loop (checked against all others)
+        if (p2_innerIdx >= ranges.length) {
+            // Add fragments to sum
+            const sum = p2_fragments.reduce((acc, r) => acc + (r.end - r.start + 1), 0);
+            p2_totalSum += sum;
+
+            setStatus(`Added ${sum} to Total`, 'highlight');
+            flashTop('success-content');
+
+            // Reset for next outer
+            p2_outerIdx++;
+            p2_innerIdx = 0;
+            p2_fragments = []; // Clear to signal done
+
+            // If we are done completely
+            if (p2_outerIdx >= ranges.length) {
+                renderP2([], null);
+            }
+            return;
+        }
+
+        // Normal Step: Compare fragments against subtractor
+        const subtractor = ranges[p2_innerIdx];
+        const prevFragments = [...p2_fragments];
+
+        // Perform math
+        p2_fragments = p2_fragments.flatMap(r => subtract(r, subtractor));
+
+        // Render
+        renderP2(p2_fragments, subtractor);
+
+        // Check if change happened for visual feedback
+        if (p2_fragments.length !== prevFragments.length ||
+            JSON.stringify(p2_fragments) !== JSON.stringify(prevFragments)) {
+            setStatus(`Intersection! Fragments updated.`, 'secondary-content');
+            flashTop('primary-content');
+        } else {
+            setStatus(`No intersection with range ${p2_innerIdx}`, 'muted-content');
+        }
+
+        p2_innerIdx++;
+    }
+
+    function subtract(r1, r2) {
+        // r1 is target, r2 is subtractor
+        // Return list of ranges
+        if (r2.start > r1.end || r2.end < r1.start) return [r1]; // No overlap
+
+        let res = [];
+        if (r1.start < r2.start) {
+            res.push({start: r1.start, end: r2.start - 1});
+        }
+        if (r1.end > r2.end) {
+            res.push({start: r2.end + 1, end: r1.end});
+        }
+        return res;
+    }
+
+    // --- Rendering ---
+
+    function renderInit() {
+        document.getElementById('contentTop').textContent = "Waiting...";
+        document.getElementById('contentBot').textContent = "Waiting...";
+        document.getElementById('statusMsg').textContent = "Ready to Start";
+
+        if (mode === 2) {
+            document.getElementById('labelTop').textContent = "Current Range Fragments";
+            document.getElementById('labelBot').textContent = "Subtracting Range";
+        } else {
+            document.getElementById('labelTop').textContent = "Current Point";
+            document.getElementById('labelBot').textContent = "Checking Range";
+        }
+    }
+
+    function renderP1(point, range) {
+        document.getElementById('contentTop').className = "card-content primary-content";
+        document.getElementById('contentTop').textContent = point;
+
+        document.getElementById('contentBot').textContent = range ? fmtRange(range) : "-";
+        document.getElementById('labelTop').textContent = `Ingredient [${p1_ingIdx}]`;
+    }
+
+    function renderP2(fragments, subtractor) {
+        const topHTML = fragments.length > 0
+            ? `<div class="range-list">${fragments.map(r => `<div class="range-item">${fmtRange(r)}</div>`).join('')}</div>`
+            : `<span class="muted-content">(Empty / Consumed)</span>`;
+
+        document.getElementById('contentTop').innerHTML = topHTML;
+
+        const botText = subtractor ? fmtRange(subtractor) : "(None)";
+        document.getElementById('contentBot').textContent = botText;
+
+        document.getElementById('labelTop').textContent = `Current Fragments (Source #${p2_outerIdx})`;
+        document.getElementById('labelBot').textContent = subtractor ? `Subtracting Range #${p2_innerIdx}` : "Finished Subtractions";
+    }
+
+    function fmtRange(r) {
+        return `[${r.start} .. ${r.end}]`;
+    }
+
+    function setStatus(msg, cls) {
+        const el = document.getElementById('statusMsg');
+        el.textContent = msg;
+        el.className = `status-message ${cls || ''}`;
+    }
+
+    function flashTop(cls) {
+        const card = document.getElementById('cardTop');
+        const content = document.getElementById('contentTop');
+
+        // Reset animation
+        card.classList.remove('pulse');
+        void card.offsetWidth; // Trigger reflow
+        card.classList.add('pulse');
+
+        // Change color temporarily?
+        // content.className = `card-content ${cls}`;
+    }
+
+    function finish(msg) {
+        isDone = true;
+        isAutoRunning = false;
+        clearTimeout(runTimer);
+        setStatus(msg, 'success-content');
+        updateButtonState();
+    }
+
+    function updateStats() {
+        document.getElementById('p1Stat').textContent = p1_foundCount;
+        document.getElementById('p2Stat').textContent = p2_totalSum;
+    }
+
+    function updateButtonState() {
+        const btn = document.getElementById('btnRun');
+        if (isAutoRunning) {
+            btn.textContent = "Stop";
+            btn.className = "danger";
+        } else {
+            btn.textContent = "Run";
+            btn.className = "primary";
+        }
+
+        if (isDone) {
+            document.getElementById('btnStep').disabled = true;
+            document.getElementById('btnRun').disabled = true;
+        } else {
+            document.getElementById('btnStep').disabled = false;
+            document.getElementById('btnRun').disabled = false;
+        }
+    }
+
+    // --- Loop ---
+
+    function toggleRun() {
+        if (isAutoRunning) {
+            isAutoRunning = false;
+            clearTimeout(runTimer);
+        } else {
+            isAutoRunning = true;
+            loop();
+        }
+        updateButtonState();
+    }
+
+    function loop() {
+        if (!isAutoRunning || isDone) return;
+
+        step();
+
+        const speed = document.getElementById('speedRange').value;
+        // Map 1-50 to 1000ms-20ms
+        const delay = 1000 - (speed * 18);
+
+        runTimer = setTimeout(loop, Math.max(20, delay));
+    }
+
+    // Init
+    parseAndReset();
+
+</script>
+</body>
+</html>
