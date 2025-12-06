@@ -50,7 +50,6 @@ tasks.register<JavaExec>("runDay") {
     group = "application"
     description = "Run a specific day's solution (use -Pday=N)"
     classpath = sourceSets["main"].runtimeClasspath
-    
     val day = project.findProperty("day") ?: "1"
     mainClass.set("Day${day}Kt")
 }
