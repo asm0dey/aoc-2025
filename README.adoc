@@ -29,7 +29,7 @@ aoc-2025/
 
 == Prerequisites
 
-* Java 24 or higher
+* Java 25 or higher (required for compilation)
 * Kotlin 2.2.21
 
 The project uses Java toolchain version 25 for compilation with JVM target 24.
@@ -43,21 +43,28 @@ To build the project, use the Gradle wrapper:
 ./gradlew build
 ----
 
-== Running Solutions
-
-Each day's solution is implemented as a standalone Kotlin file with a `main` function. To run a specific day's solution:
+On Windows, use:
 
 [source,bash]
 ----
-./gradlew run --args="dayX"
+gradlew.bat build
 ----
 
-Or compile and run directly using `kotlinc`:
+== Running Solutions
+
+Each day's solution is implemented as a standalone Kotlin file with a `main` function. To run a specific day's solution, compile and run directly using the Kotlin compiler:
 
 [source,bash]
 ----
 kotlinc src/dayX.kt src/util.kt -include-runtime -d dayX.jar
 java -jar dayX.jar
+----
+
+Or use the Kotlin script runner:
+
+[source,bash]
+----
+kotlinc -script src/dayX.kt
 ----
 
 == Project Configuration
