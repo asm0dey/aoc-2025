@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("jvm") version "2.2.21"
+    application
 }
 
 group = "com.github.asm0dey"
@@ -43,4 +44,13 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_24)
     }
+}
+
+tasks.register<JavaExec>("runDay") {
+    group = "application"
+    description = "Run a specific day's solution (use -Pday=N)"
+    classpath = sourceSets["main"].runtimeClasspath
+    
+    val day = project.findProperty("day") ?: "1"
+    mainClass.set("Day${day}Kt")
 }

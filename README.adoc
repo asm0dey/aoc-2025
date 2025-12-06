@@ -52,7 +52,27 @@ gradlew.bat build
 
 == Running Solutions
 
-Each day's solution is implemented as a standalone Kotlin file with a `main` function. To run a specific day's solution, compile and run using the Kotlin compiler:
+Each day's solution is implemented as a standalone Kotlin file with a `main` function. 
+
+=== Using Gradle
+
+To run a specific day's solution using the Gradle task:
+
+[source,bash]
+----
+./gradlew runDay -Pday=1
+----
+
+On Windows:
+
+[source,bash]
+----
+gradlew.bat runDay -Pday=1
+----
+
+=== Manual Compilation
+
+Alternatively, compile and run directly using the Kotlin compiler:
 
 [source,bash]
 ----
@@ -109,7 +129,7 @@ The project uses JUnit Platform for testing. Run tests with:
 
 == License
 
-This project is part of personal Advent of Code participation.
+This project is licensed under the MIT License - see the link:LICENSE[LICENSE] file for details.
 
 == Author
 
