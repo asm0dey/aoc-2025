@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 6 Visualization: Vertical Math</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --panel-bg: #252526;
+            --accent: #61afef; /* Blue */
+            --highlight: #e5c07b; /* Gold/Yellow */
+            --danger: #e06c75;
+            --success: #98c379;
+            --grid-line: #333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        label { font-size: 0.9rem; color: #aaa; display: block; margin-bottom: 5px; }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            resize: none;
+            white-space: pre;
+            overflow: auto;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        /* Stats Panel */
+        .stats-panel {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        .stat-val { font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .val-total { color: var(--success); font-size: 1.3em; }
+        .val-current { color: var(--highlight); }
+
+        /* Controls */
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: filter 0.2s;
+            color: white;
+        }
+
+        .btn-primary { background-color: var(--accent); }
+        .btn-secondary { background-color: #444; }
+        .btn-danger { background-color: var(--danger); }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { filter: brightness(0.5); cursor: not-allowed; }
+
+        /* Main Canvas */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background-color: #111;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        canvas {
+            box-shadow: none;
+            background-color: #1e1e1e;
+            border: none;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #expressionDisplay {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            height: 40px;
+            font-family: monospace;
+            font-size: 24px;
+            color: var(--highlight);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .overlay-help {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #666;
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Day 6: Vertical Math</h2>
+
+    <div>
+        <label>Mode</label>
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <label style="color:white; display:flex; align-items:center; cursor:pointer">
+                <input type="radio" name="mode" value="p1" onchange="reset()"> Part 1 (Tokens)
+            </label>
+            <label style="color:white; display:flex; align-items:center; cursor:pointer">
+                <input type="radio" name="mode" value="p2" checked onchange="reset()"> Part 2 (Grid)
+            </label>
+        </div>
+    </div>
+
+    <div>
+        <label for="inputData">Grid Input</label>
+        <textarea id="inputData" spellcheck="false">
+123 328  51 64
+ 45 64  387 23
+  6 98  215 314
+*   +   *   +</textarea>
+        <button class="btn-secondary" style="width:100%; margin-top:5px;" onclick="loadData()">Load Grid</button>
+    </div>
+
+    <div class="stats-panel">
+        <div class="stat-row">
+            <span>Current Op:</span>
+            <span id="uiOp" class="stat-val">-</span>
+        </div>
+        <div class="stat-row">
+            <span>Current Result:</span>
+            <span id="uiBlockVal" class="stat-val val-current">0</span>
+        </div>
+        <hr style="border-color:#444; opacity:0.5">
+        <div class="stat-row">
+            <span>Total Sum:</span>
+            <span id="uiTotal" class="stat-val val-total">0</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-primary" id="btnStep" onclick="step()" disabled>Step</button>
+        <button class="btn-primary" id="btnRun" onclick="toggleRun()" disabled>Run Auto</button>
+        <button class="btn-danger" onclick="reset()">Reset</button>
+    </div>
+
+    <div>
+        <label>Speed</label>
+        <input type="range" id="speedRange" min="1" max="20" value="5" style="width:100%">
+    </div>
+</div>
+
+<div class="main-content" id="mainContainer">
+    <canvas id="gridCanvas"></canvas>
+    <div id="expressionDisplay"></div>
+    <div class="overlay-help">Drag to Pan • Scroll to Zoom</div>
+</div>
+
+<script>
+    // --- Logic & State ---
+
+    // Grid State
+    let grid = []; // 2D array of chars
+    let numRows = 0;
+    let numCols = 0;
+    let mode = 'p2'; // 'p1' or 'p2'
+
+    // Process State
+    let separatorIndices = [];
+    let blocks = []; // {start, end, numbers: [], op: char}
+    let p1Columns = []; // {op, numbers: [], tokens: [{row, colStart, colEnd, value}]}
+
+    let currentBlockIndex = -1;
+    let currentColIndexInBlock = -1;
+    let processingState = 'IDLE'; // IDLE, SCANNING, PROCESSING, FINISHED
+
+    let totalSum = 0n;
+    let currentBlockValues = [];
+
+    // Animation vars
+    let isAutoRunning = false;
+    let scanLineX = -1;
+    let highlightRects = []; // Array of {col, row, wCols, hRows, color}
+
+    // View State
+    const BASE_CELL_SIZE = 40;
+    let view = { x: 50, y: 50, scale: 0.8 };
+    let targetView = { x: 50, y: 50, scale: 0.8 };
+    let isDragging = false;
+    let lastMouse = { x: 0, y: 0 };
+    let lastInteractTime = 0;
+
+    const canvas = document.getElementById('gridCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('mainContainer');
+
+    // --- Input Parsing ---
+
+    function parseInputGrid(text) {
+        const lines = text.split('\n').filter(line => line.length > 0);
+        if (lines.length === 0) return [];
+        const maxLength = Math.max(...lines.map(l => l.length));
+
+        // Pad lines to form a rectangle
+        const newGrid = lines.map(line => {
+            return line.padEnd(maxLength, ' ').split('');
+        });
+
+        return newGrid;
+    }
+
+    function parseInputPart1(text) {
+        const lines = text.split('\n').filter(line => line.trim().length > 0);
+        if (lines.length === 0) return [];
+
+        const mappedLines = lines.map((line, rowIndex) => {
+            const tokens = [];
+            let re = /\S+/g;
+            let match;
+            while ((match = re.exec(line)) !== null) {
+                tokens.push({
+                    text: match[0],
+                    colStart: match.index,
+                    colEnd: match.index + match[0].length,
+                    row: rowIndex
+                });
+            }
+            return tokens;
+        });
+
+        if (mappedLines.length === 0) return [];
+
+        const lastLineTokens = mappedLines[mappedLines.length - 1];
+        const columns = [];
+
+        for (let i = 0; i < lastLineTokens.length; i++) {
+            const opToken = lastLineTokens[i];
+            const nums = [];
+            const colTokens = [];
+
+            // Gather i-th token from previous lines
+            for (let r = 0; r < mappedLines.length - 1; r++) {
+                if (i < mappedLines[r].length) {
+                    const t = mappedLines[r][i];
+                    nums.push(BigInt(t.text));
+                    colTokens.push(t);
+                }
+            }
+
+            colTokens.push(opToken);
+
+            columns.push({
+                index: i,
+                op: opToken.text,
+                numbers: nums,
+                tokens: colTokens
+            });
+        }
+
+        return columns;
+    }
+
+    function identifyBlocksPart2(gridData) {
+        if(gridData.length === 0) return [];
+        const rows = gridData.length;
+        const cols = gridData[0].length;
+
+        const separators = [-1];
+
+        for(let c=0; c<cols; c++) {
+            let isSep = true;
+            for(let r=0; r<rows; r++) {
+                if(gridData[r][c] !== ' ') {
+                    isSep = false;
+                    break;
+                }
+            }
+            if(isSep) separators.push(c);
+        }
+        separators.push(cols);
+
+        const foundBlocks = [];
+        for(let i=0; i<separators.length-1; i++) {
+            const start = separators[i];
+            const end = separators[i+1];
+
+            if (end - start <= 1) continue;
+
+            const opRow = rows - 1;
+            const opCol = start + 1;
+            const op = gridData[opRow][opCol];
+
+            const nums = [];
+            for(let c = end - 1; c > start; c--) {
+                let numStr = "";
+                for(let r=0; r < rows-1; r++) {
+                    const char = gridData[r][c];
+                    if(char && /^\d$/.test(char)) numStr += char;
+                }
+                if(numStr.trim().length > 0) {
+                    nums.push({
+                        col: c,
+                        value: BigInt(numStr)
+                    });
+                }
+            }
+
+            if(nums.length > 0) {
+                foundBlocks.push({
+                    start: start,
+                    end: end,
+                    op: op,
+                    numberCols: nums
+                });
+            }
+        }
+        return { separators, foundBlocks };
+    }
+
+    // --- Drawing & Render Loop ---
+
+    function resizeCanvas() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+    }
+
+    function renderLoop() {
+        // Smooth scroll interpolation
+        if (!isDragging && Date.now() - lastInteractTime > 500) {
+            const ease = 0.05;
+            view.x += (targetView.x - view.x) * ease;
+            view.y += (targetView.y - view.y) * ease;
+            view.scale += (targetView.scale - view.scale) * ease;
+        }
+
+        draw();
+        requestAnimationFrame(renderLoop);
+    }
+
+    function draw() {
+        ctx.fillStyle = '#1e1e1e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (grid.length === 0) return;
+
+        const cellSize = BASE_CELL_SIZE * view.scale;
+
+        // Calculate visible range optimization
+        const startCol = Math.floor((-view.x) / cellSize);
+        const endCol = Math.ceil((canvas.width - view.x) / cellSize);
+        const startRow = Math.floor((-view.y) / cellSize);
+        const endRow = Math.ceil((canvas.height - view.y) / cellSize);
+
+        const rMin = Math.max(0, startRow);
+        const rMax = Math.min(numRows, endRow);
+        const cMin = Math.max(0, startCol);
+        const cMax = Math.min(numCols, endCol);
+
+        ctx.font = `${Math.floor(20 * view.scale)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Draw Grid Characters
+        for(let r=rMin; r<rMax; r++) {
+            for(let c=cMin; c<cMax; c++) {
+                const char = grid[r][c];
+                if (char === ' ') continue;
+
+                const x = view.x + c * cellSize + cellSize/2;
+                const y = view.y + r * cellSize + cellSize/2;
+
+                if (r === numRows - 1) ctx.fillStyle = '#e06c75';
+                else ctx.fillStyle = '#e0e0e0';
+
+                // Part 2 Scanning Line Highlight
+                if (mode === 'p2' && processingState === 'SCANNING' && c === scanLineX) {
+                    ctx.fillStyle = '#61afef';
+                }
+
+                ctx.fillText(char, x, y);
+            }
+        }
+
+        // Mode Specific Visuals
+        if (mode === 'p2') {
+            // Separator Lines
+            ctx.lineWidth = Math.max(1, 1 * view.scale);
+
+            separatorIndices.forEach(idx => {
+                if (idx < cMin || idx > cMax) return;
+                const x = view.x + idx * cellSize;
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.fillRect(x, view.y, cellSize, numRows * cellSize);
+
+                ctx.strokeStyle = '#333';
+                ctx.beginPath();
+                ctx.moveTo(x, view.y);
+                ctx.lineTo(x, view.y + numRows * cellSize);
+                ctx.stroke();
+            });
+
+            // Scan Line
+            if (processingState === 'SCANNING' && scanLineX >= cMin && scanLineX <= cMax) {
+                const x = view.x + scanLineX * cellSize;
+                ctx.strokeStyle = '#61afef';
+                ctx.lineWidth = Math.max(2, 2 * view.scale);
+                ctx.beginPath();
+                ctx.moveTo(x, view.y - 10 * view.scale);
+                ctx.lineTo(x, view.y + numRows * cellSize + 10 * view.scale);
+                ctx.stroke();
+            }
+
+            // Active Block Number Highlight
+            if (processingState === 'PROCESSING' && currentBlockIndex >= 0 && currentBlockIndex < blocks.length) {
+                const block = blocks[currentBlockIndex];
+                if (currentColIndexInBlock >= 0 && currentColIndexInBlock < block.numberCols.length) {
+                    const activeNum = block.numberCols[currentColIndexInBlock];
+
+                    ctx.strokeStyle = '#98c379';
+                    ctx.lineWidth = Math.max(2, 2 * view.scale);
+                    ctx.strokeRect(
+                        view.x + activeNum.col * cellSize,
+                        view.y,
+                        cellSize,
+                        (numRows - 1) * cellSize
+                    );
+                }
+            }
+        }
+
+        // Highlight Rects (Generic)
+        highlightRects.forEach(rect => {
+            const rx = view.x + rect.col * cellSize;
+            const ry = view.y + rect.row * cellSize;
+            const rw = rect.wCols * cellSize;
+            const rh = rect.hRows * cellSize;
+
+            ctx.strokeStyle = rect.color;
+            ctx.lineWidth = Math.max(3, 3 * view.scale);
+            ctx.strokeRect(rx, ry, rw, rh);
+        });
+    }
+
+    function focusOn(col, row, w, h) {
+        // If user recently interacted, don't auto-scroll
+        if (Date.now() - lastInteractTime < 2000) return;
+
+        // Ensure readable scale (min 0.6)
+        let targetScale = Math.max(0.6, view.scale);
+
+        const cellSize = BASE_CELL_SIZE * targetScale;
+
+        // Grid center of interest
+        const gridCX = (col + w/2) * cellSize;
+        const gridCY = (row + h/2) * cellSize;
+
+        // Screen center
+        const screenCX = canvas.width / 2;
+        const screenCY = canvas.height / 2;
+
+        targetView.x = screenCX - gridCX;
+        targetView.y = screenCY - gridCY;
+        targetView.scale = targetScale;
+    }
+
+    // --- Logic Execution ---
+
+    function loadData() {
+        const txt = document.getElementById('inputData').value;
+        const radios = document.getElementsByName('mode');
+        for(let r of radios) if(r.checked) mode = r.value;
+
+        // Parse Grid for display
+        grid = parseInputGrid(txt);
+        numRows = grid.length;
+        numCols = grid.length > 0 ? grid[0].length : 0;
+
+        resizeCanvas();
+        reset();
+
+        document.getElementById('btnStep').disabled = false;
+        document.getElementById('btnRun').disabled = false;
+
+        // Initial Focus
+        targetView.x = 50;
+        targetView.y = 50;
+        view.x = 50;
+        view.y = 50;
+    }
+
+    function reset() {
+        const radios = document.getElementsByName('mode');
+        for(let r of radios) if(r.checked) mode = r.value;
+
+        processingState = 'IDLE';
+        currentBlockIndex = -1;
+        currentColIndexInBlock = -1;
+        scanLineX = -1;
+        highlightRects = [];
+        totalSum = 0n;
+        currentBlockValues = [];
+
+        separatorIndices = [];
+        blocks = [];
+        p1Columns = [];
+
+        document.getElementById('uiTotal').textContent = '0';
+        document.getElementById('uiOp').textContent = '-';
+        document.getElementById('uiBlockVal').textContent = '0';
+        document.getElementById('expressionDisplay').textContent = '';
+
+        isAutoRunning = false;
+    }
+
+    function toggleRun() {
+        if (isAutoRunning) {
+            isAutoRunning = false;
+            document.getElementById('btnRun').textContent = "Run Auto";
+            document.getElementById('btnRun').classList.remove('btn-danger');
+        } else {
+            isAutoRunning = true;
+            document.getElementById('btnRun').textContent = "Stop";
+            document.getElementById('btnRun').classList.add('btn-danger');
+            step();
+        }
+    }
+
+    function step() {
+        const speedVal = parseInt(document.getElementById('speedRange').value);
+
+        if (processingState === 'IDLE') {
+            const txt = document.getElementById('inputData').value;
+
+            if (mode === 'p1') {
+                p1Columns = parseInputPart1(txt);
+                processingState = 'PROCESSING';
+                currentBlockIndex = 0;
+            } else {
+                // P2
+                const res = identifyBlocksPart2(grid);
+                separatorIndices = res.separators;
+                blocks = res.foundBlocks;
+                processingState = 'SCANNING';
+                scanLineX = -1;
+            }
+
+            if (isAutoRunning) setTimeout(step, 100);
+
+        } else if (mode === 'p2' && processingState === 'SCANNING') {
+            animateScanP2();
+        } else if (processingState === 'PROCESSING') {
+            if (mode === 'p1') stepP1();
+            else stepP2();
+        } else if (processingState === 'FINISHED') {
+            if(isAutoRunning) toggleRun();
+        }
+    }
+
+    function animateScanP2() {
+        scanLineX += 1;
+
+        // Focus on scan line
+        if (scanLineX >= 0) {
+            focusOn(scanLineX, numRows/2, 1, numRows);
+        }
+
+        if (scanLineX > numCols) {
+            processingState = 'PROCESSING';
+            currentBlockIndex = 0;
+            currentColIndexInBlock = -1;
+            scanLineX = -1;
+
+            if(isAutoRunning) setTimeout(step, 100);
+        } else {
+            const speedVal = parseInt(document.getElementById('speedRange').value);
+            const jump = Math.ceil(speedVal / 5);
+            if(speedVal > 15) scanLineX += jump;
+
+            if (isAutoRunning) requestAnimationFrame(animateScanP2);
+        }
+    }
+
+    function stepP1() {
+        if (currentBlockIndex >= p1Columns.length) {
+            finish();
+            return;
+        }
+
+        const col = p1Columns[currentBlockIndex];
+
+        // Focus on current column tokens
+        if (col.tokens.length > 0) {
+            const startC = col.tokens[0].colStart;
+            // Approx width based on first token or fixed
+            focusOn(startC, numRows/2, 5, numRows);
+        }
+
+        // Highlight logic for P1 using grid coords
+        highlightRects = col.tokens.map(t => ({
+            col: t.colStart,
+            row: t.row,
+            wCols: t.colEnd - t.colStart,
+            hRows: 1,
+            color: '#e5c07b'
+        }));
+
+        document.getElementById('uiOp').textContent = col.op;
+
+        let res = 0n;
+        if (col.numbers.length > 0) {
+            if (col.op === '+') {
+                res = col.numbers.reduce((acc, val) => acc + val, 0n);
+            } else if (col.op === '*') {
+                res = col.numbers.reduce((acc, val) => acc * val, 1n);
+            }
+        }
+
+        totalSum += res;
+
+        document.getElementById('expressionDisplay').textContent =
+            `${col.numbers.join(col.op)} = ${res}`;
+        document.getElementById('uiBlockVal').textContent = res.toString();
+        document.getElementById('uiTotal').textContent = totalSum.toString();
+
+        currentBlockIndex++;
+
+        if (isAutoRunning) {
+            const speedVal = parseInt(document.getElementById('speedRange').value);
+            setTimeout(step, 1000 - (speedVal * 40));
+        }
+    }
+
+    function stepP2() {
+        if (currentBlockIndex >= blocks.length) {
+            finish();
+            return;
+        }
+
+        const block = blocks[currentBlockIndex];
+
+        // Highlight Block Rect
+        highlightRects = [{
+            col: block.start + 1,
+            row: 0,
+            wCols: block.end - block.start - 1,
+            hRows: numRows,
+            color: '#e5c07b'
+        }];
+
+        document.getElementById('uiOp').textContent = block.op;
+
+        // Init block processing
+        if (currentColIndexInBlock === -1) {
+            currentBlockValues = [];
+            currentColIndexInBlock = 0;
+            document.getElementById('expressionDisplay').textContent = "Processing Block...";
+
+            // Focus on entire block
+            focusOn(block.start, numRows/2, block.end - block.start, numRows);
+
+            if(isAutoRunning) {
+                const speedVal = parseInt(document.getElementById('speedRange').value);
+                setTimeout(step, 500 / (speedVal/5));
+            }
+            return;
+        }
+
+        if (currentColIndexInBlock < block.numberCols.length) {
+            // Processing a number column
+            const numObj = block.numberCols[currentColIndexInBlock];
+            currentBlockValues.push(numObj.value);
+
+            const numStr = numObj.value.toString();
+            document.getElementById('expressionDisplay').textContent =
+                `Found: ${numStr} (Col ${numObj.col})`;
+
+            // Focus on this number column
+            focusOn(numObj.col, numRows/2, 1, numRows);
+
+            currentColIndexInBlock++;
+
+            if(isAutoRunning) {
+                const speedVal = parseInt(document.getElementById('speedRange').value);
+                setTimeout(step, 800 / (speedVal/5));
+            }
+        } else {
+            // Block Complete
+            let res = 0n;
+            if (currentBlockValues.length > 0) {
+                if (block.op === '+') {
+                    res = currentBlockValues.reduce((acc, val) => acc + val, 0n);
+                    document.getElementById('expressionDisplay').textContent =
+                        `${currentBlockValues.join(' + ')} = ${res}`;
+                } else if (block.op === '*') {
+                    res = currentBlockValues.reduce((acc, val) => acc * val, 1n);
+                    document.getElementById('expressionDisplay').textContent =
+                        `${currentBlockValues.join(' * ')} = ${res}`;
+                }
+            }
+            totalSum += res;
+
+            document.getElementById('uiBlockVal').textContent = res.toString();
+            document.getElementById('uiTotal').textContent = totalSum.toString();
+
+            currentBlockIndex++;
+            currentColIndexInBlock = -1;
+
+            if(isAutoRunning) {
+                setTimeout(step, 1000);
+            }
+        }
+    }
+
+    function finish() {
+        processingState = 'FINISHED';
+        highlightRects = [];
+        document.getElementById('uiOp').textContent = 'DONE';
+        document.getElementById('expressionDisplay').textContent = 'Total: ' + totalSum.toString();
+    }
+
+    // --- Interaction ---
+
+    canvas.addEventListener('mousedown', e => {
+        isDragging = true;
+        lastInteractTime = Date.now();
+        lastMouse = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        const dx = e.clientX - lastMouse.x;
+        const dy = e.clientY - lastMouse.y;
+        lastMouse = { x: e.clientX, y: e.clientY };
+
+        view.x += dx;
+        view.y += dy;
+
+        // Sync target view so it doesn't snap back immediately
+        targetView.x = view.x;
+        targetView.y = view.y;
+        lastInteractTime = Date.now();
+    });
+
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        lastInteractTime = Date.now();
+        const zoomSpeed = 0.1;
+        const factor = 1 - Math.sign(e.deltaY) * zoomSpeed;
+
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const oldScale = view.scale;
+        const newScale = Math.max(0.05, Math.min(5.0, oldScale * factor));
+
+        view.x = mouseX - (mouseX - view.x) * (newScale / oldScale);
+        view.y = mouseY - (mouseY - view.y) * (newScale / oldScale);
+        view.scale = newScale;
+
+        targetView.x = view.x;
+        targetView.y = view.y;
+        targetView.scale = view.scale;
+    }, { passive: false });
+
+    window.addEventListener('resize', resizeCanvas);
+
+    // Init
+    window.onload = () => {
+        loadData();
+        renderLoop(); // Start render loop
+    };
+
+</script>
+</body>
+</html>
