@@ -1,0 +1,116 @@
+= Advent of Code 2025
+:toc: left
+:toclevels: 3
+:source-highlighter: rouge
+
+== Overview
+
+This repository contains solutions for https://adventofcode.com/2025[Advent of Code 2025], implemented in Kotlin.
+
+== Project Structure
+
+The project is organized as follows:
+
+----
+aoc-2025/
+|-- src/              # Source files
+|   |-- day1.kt       # Day 1 solution
+|   |-- day2.kt       # Day 2 solution
+|   |-- day3.kt       # Day 3 solution
+|   |-- day4.kt       # Day 4 solution
+|   |-- day5.kt       # Day 5 solution
+|   |-- day6.kt       # Day 6 solution
+|   |-- util.kt       # Utility functions
+|   `-- *.txt         # Test input files
+|-- vis/              # HTML visualizations for each day
+|-- build.gradle.kts  # Gradle build configuration
+`-- settings.gradle.kts
+----
+
+== Prerequisites
+
+* Java 24 or higher
+* Kotlin 2.2.21
+
+The project uses Java toolchain version 25 for compilation with JVM target 24.
+
+== Building the Project
+
+To build the project, use the Gradle wrapper:
+
+[source,bash]
+----
+./gradlew build
+----
+
+== Running Solutions
+
+Each day's solution is implemented as a standalone Kotlin file with a `main` function. To run a specific day's solution:
+
+[source,bash]
+----
+./gradlew run --args="dayX"
+----
+
+Or compile and run directly using `kotlinc`:
+
+[source,bash]
+----
+kotlinc src/dayX.kt src/util.kt -include-runtime -d dayX.jar
+java -jar dayX.jar
+----
+
+== Project Configuration
+
+The project is configured with:
+
+* *Group ID*: `com.github.asm0dey`
+* *Version*: 1.0-SNAPSHOT
+* *Kotlin Version*: 2.2.21
+* *JVM Target*: 24
+* *Java Toolchain*: 25
+
+== Visualizations
+
+HTML visualizations for each day's challenge are available in the `vis/` directory. These provide visual representations of the problem-solving process.
+
+To view a visualization, open the corresponding HTML file in a web browser:
+
+[source,bash]
+----
+open vis/day1.html
+----
+
+== Solution Approach
+
+Each day's solution typically includes:
+
+* `part1()` function: Solves the first part of the challenge
+* `part2()` function: Solves the second part of the challenge
+* Test input files: `dayX_t1.txt` containing sample inputs for testing
+
+== Development
+
+=== Adding a New Day's Solution
+
+. Create a new file `src/dayN.kt`
+. Implement the solution with `part1()` and `part2()` functions
+. Add test input files as needed
+. Run and verify the solution
+
+=== Testing
+
+The project uses JUnit Platform for testing. Run tests with:
+
+[source,bash]
+----
+./gradlew test
+----
+
+== License
+
+This project is part of personal Advent of Code participation.
+
+== Author
+
+https://github.com/asm0dey[asm0dey]
