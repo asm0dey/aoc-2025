@@ -35,11 +35,14 @@
             flex-direction: column;
             gap: 20px;
             border-right: 1px solid #333;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
             z-index: 10;
         }
 
-        h2 { margin: 0; color: var(--accent); }
+        h2 {
+            margin: 0;
+            color: var(--accent);
+        }
 
         .control-group {
             display: flex;
@@ -64,6 +67,7 @@
             border-radius: 4px;
             overflow: hidden;
         }
+
         .tab {
             flex: 1;
             padding: 10px;
@@ -73,6 +77,7 @@
             color: #888;
             transition: background 0.2s;
         }
+
         .tab.active {
             background: var(--accent);
             color: #1e1e1e;
@@ -80,17 +85,23 @@
         }
 
         .stats-box {
-            background: rgba(0,0,0,0.2);
+            background: rgba(0, 0, 0, 0.2);
             padding: 15px;
             border-radius: 6px;
             border: 1px solid #333;
         }
+
         .stat-row {
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
         }
-        .stat-val { font-family: monospace; font-weight: bold; color: var(--highlight); }
+
+        .stat-val {
+            font-family: monospace;
+            font-weight: bold;
+            color: var(--highlight);
+        }
 
         button {
             padding: 10px;
@@ -101,10 +112,23 @@
             color: white;
             background-color: #444;
         }
-        button.primary { background-color: var(--accent); }
-        button.danger { background-color: var(--subtractor); }
-        button:hover { filter: brightness(1.1); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        button.primary {
+            background-color: var(--accent);
+        }
+
+        button.danger {
+            background-color: var(--subtractor);
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
 
         /* Main Area */
         .main-display {
@@ -124,7 +148,7 @@
             padding: 30px;
             width: 80%;
             max-width: 800px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             text-align: center;
             border: 1px solid #444;
             position: relative;
@@ -154,16 +178,27 @@
         }
 
         .range-item {
-            background: rgba(0,0,0,0.2);
+            background: rgba(0, 0, 0, 0.2);
             padding: 5px 10px;
             border-radius: 4px;
             border: 1px solid #444;
         }
 
-        .primary-content { color: var(--accent); }
-        .secondary-content { color: var(--subtractor); }
-        .success-content { color: var(--success); }
-        .muted-content { color: var(--muted); }
+        .primary-content {
+            color: var(--accent);
+        }
+
+        .secondary-content {
+            color: var(--subtractor);
+        }
+
+        .success-content {
+            color: var(--success);
+        }
+
+        .muted-content {
+            color: var(--muted);
+        }
 
         .status-message {
             font-size: 1.2rem;
@@ -172,11 +207,20 @@
         }
 
         /* Animations */
-        .pulse { animation: pulse 0.5s ease-in-out; }
+        .pulse {
+            animation: pulse 0.5s ease-in-out;
+        }
+
         @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+            }
         }
 
     </style>
@@ -296,7 +340,7 @@
     function switchMode(m) {
         mode = m;
         document.querySelectorAll('.tab').forEach((t, i) => {
-            if ((m===2 && i===0) || (m===1 && i===1)) t.classList.add('active');
+            if ((m === 2 && i === 0) || (m === 1 && i === 1)) t.classList.add('active');
             else t.classList.remove('active');
         });
         parseAndReset();
@@ -560,8 +604,8 @@
         step();
 
         const speed = document.getElementById('speedRange').value;
-        // Map 1-50 to 1000ms-20ms
-        const delay = 1000 - (speed * 18);
+        // Map 1-50 to 1000ms-0ms
+        const delay = 1000 - speed * 20;
 
         runTimer = setTimeout(loop, Math.max(20, delay));
     }
