@@ -355,18 +355,6 @@
 
         reset();
 
-        // Find Start
-        if (grid.length > 0) {
-            const startX = grid[0].findIndex(c => c === 'S');
-            if (startX !== -1) {
-                p1Beams.add(startX);
-                p2Beams.set(startX, 1n); // Use BigInt for counts just in case, though Kotlin uses Long
-
-                // Mark start in history
-                beamHistory[0] = new Set([startX]);
-            }
-        }
-
         resizeCanvas();
         document.getElementById('btnStep').disabled = false;
         document.getElementById('btnRun').disabled = false;
@@ -382,6 +370,18 @@
 
         isAutoRunning = false;
         cancelAnimationFrame(animationFrameId);
+
+        // Re-initialize start if grid exists
+        if (grid.length > 0) {
+            const startX = grid[0].findIndex(c => c === 'S');
+            if (startX !== -1) {
+                p1Beams.add(startX);
+                p2Beams.set(startX, 1n); // Use BigInt for counts
+
+                // Mark start in history
+                beamHistory[0] = new Set([startX]);
+            }
+        }
 
         updateUI();
         draw();
