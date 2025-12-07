@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 7: Beam Splitter</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --panel-bg: #252526;
+            --accent: #61afef; /* Blue */
+            --highlight: #e5c07b; /* Gold/Yellow */
+            --danger: #e06c75;
+            --beam-color: #98c379; /* Green */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        label { font-size: 0.9rem; color: #aaa; display: block; margin-bottom: 5px; }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            resize: vertical;
+            padding: 5px;
+            box-sizing: border-box;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        /* Stats Panel */
+        .stats-panel {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        .stat-val { font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .val-p1 { color: var(--accent); }
+        .val-p2 { color: var(--highlight); }
+
+        /* Controls */
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: filter 0.2s;
+            color: white;
+        }
+
+        .btn-primary { background-color: var(--accent); }
+        .btn-secondary { background-color: #444; }
+        .btn-danger { background-color: var(--danger); }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { filter: brightness(0.5); cursor: not-allowed; }
+
+        /* Main Canvas */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background: #111;
+            overflow: hidden; /* Prevent scrolling */
+        }
+
+        canvas {
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            image-rendering: pixelated; /* Sharp rendering for grid */
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Day 7: Beam Splitter</h2>
+
+    <div>
+        <label for="inputData">Grid Input (S, ^, .)</label>
+        <textarea id="inputData" spellcheck="false">.......S.......
+...............
+.......^.......
+...............
+......^.^......
+...............
+.....^.^.^.....
+...............
+....^.^...^....
+...............
+...^.^...^.^...
+...............
+..^...^.....^..
+...............
+.^.^.^.^.^...^.
+...............</textarea>
+        <button class="btn-secondary" style="width:100%; margin-top:5px;" onclick="loadData()">Load Grid</button>
+    </div>
+
+    <div class="stats-panel">
+        <div class="stat-row">
+            <span>Depth:</span>
+            <span id="uiDepth" class="stat-val">0</span>
+        </div>
+        <hr style="border-color:#444; opacity:0.5">
+        <div class="stat-row">
+            <span>Splitter Count (P1):</span>
+            <span id="uiP1" class="stat-val val-p1">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Total Beams (P2):</span>
+            <span id="uiP2" class="stat-val val-p2">0</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-primary" id="btnStep" onclick="step()" disabled>Step</button>
+        <button class="btn-primary" id="btnRun" onclick="toggleRun()" disabled>Run Auto</button>
+        <button class="btn-danger" onclick="reset()">Reset</button>
+    </div>
+
+    <div>
+        <label>Speed</label>
+        <input type="range" id="speedRange" min="1" max="20" value="10" style="width:100%">
+    </div>
+</div>
+
+<div class="main-content">
+    <canvas id="gridCanvas"></canvas>
+</div>
+
+<script>
+    // --- Logic ---
+    let grid = []; // 2D array of chars
+    let width = 0;
+    let height = 0;
+
+    // State
+    let currentDepth = 0;
+    let p1Beams = new Set(); // Set<Int> (columns)
+    let p2Beams = new Map(); // Map<Int, Long> (column -> count)
+
+    let p1Score = 0;
+
+    // History for visualization (2D array of boolean or int)
+    // We want to visualize the beams that HAVE passed.
+    let beamHistory = [];
+
+    // Animation State
+    let isAutoRunning = false;
+    let animationFrameId;
+
+    // Zoom & Pan State
+    let transform = { k: 1, x: 0, y: 0 };
+    let isDragging = false;
+    let lastMouse = { x: 0, y: 0 };
+
+    // Canvas
+    const canvas = document.getElementById('gridCanvas');
+    const ctx = canvas.getContext('2d');
+    let CELL_SIZE = 20;
+
+    function parseInput(text) {
+        const lines = text.trim().split(/\r?\n/).filter(line => line.length > 0);
+        if (lines.length === 0) return [];
+
+        // Pad lines to max width
+        const maxW = Math.max(...lines.map(l => l.length));
+        return lines.map(l => l.padEnd(maxW, '.').split(''));
+    }
+
+    // --- Drawing ---
+
+    function resizeCanvas() {
+        if (grid.length === 0) return;
+        
+        // Fit canvas to full container size
+        const container = document.querySelector('.main-content');
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+
+        // Calculate auto-fit scale
+        const gridW = width * CELL_SIZE;
+        const gridH = height * CELL_SIZE;
+        
+        if (gridW > 0 && gridH > 0) {
+            const scaleX = (canvas.width - 40) / gridW;
+            const scaleY = (canvas.height - 40) / gridH;
+            transform.k = Math.min(scaleX, scaleY);
+            
+            // Center the grid
+            transform.x = (canvas.width - gridW * transform.k) / 2;
+            transform.y = (canvas.height - gridH * transform.k) / 2;
+        }
+
+        draw();
+    }
+
+    function draw() {
+        // Clear (Screen space)
+        ctx.setTransform(1, 0, 0, 1, 0, 0); 
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (grid.length === 0) return;
+
+        ctx.save();
+        // Apply Zoom/Pan
+        ctx.translate(transform.x, transform.y);
+        ctx.scale(transform.k, transform.k);
+
+        ctx.font = `${Math.floor(CELL_SIZE * 0.8)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const char = grid[y][x];
+                const px = x * CELL_SIZE;
+                const py = y * CELL_SIZE;
+                const cx = px + CELL_SIZE / 2;
+                const cy = py + CELL_SIZE / 2;
+
+                // 1. Draw Beam Trace (Green Pipe)
+                // If there is a beam here currently or in history
+                if (beamHistory[y] && beamHistory[y].has(x)) {
+                    ctx.fillStyle = '#98c379'; // Green
+                    ctx.font = `bold ${Math.floor(CELL_SIZE * 0.9)}px monospace`;
+                    ctx.fillText('|', cx, cy);
+                }
+
+                // 2. Draw Objects
+                if (char === 'S') {
+                    // Red Star
+                    ctx.fillStyle = '#e06c75'; // Red
+                    ctx.font = `${Math.floor(CELL_SIZE * 0.8)}px sans-serif`; // Use emoji or generic shape
+                    ctx.fillText('★', cx, cy);
+                } else if (char === '^') {
+                    // Yellow Circle
+                    ctx.fillStyle = '#e5c07b'; // Yellow
+                    ctx.font = `${Math.floor(CELL_SIZE * 0.8)}px sans-serif`;
+                    ctx.fillText('⬤', cx, cy);
+                }
+                // Dots are not visualized
+            }
+        }
+        
+        // Highlight current depth row slightly
+        if (currentDepth < height) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(0, currentDepth * CELL_SIZE, width * CELL_SIZE, CELL_SIZE);
+        }
+
+        ctx.restore();
+    }
+
+    // --- Interaction ---
+
+    canvas.addEventListener('mousedown', e => {
+        isDragging = true;
+        lastMouse = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        const dx = e.clientX - lastMouse.x;
+        const dy = e.clientY - lastMouse.y;
+        lastMouse = { x: e.clientX, y: e.clientY };
+        
+        transform.x += dx;
+        transform.y += dy;
+        draw();
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const zoomIntensity = 0.1;
+        const delta = e.deltaY > 0 ? -zoomIntensity : zoomIntensity;
+        const newScale = transform.k * (1 + delta);
+
+        if (newScale < 0.1) return; // Limit min zoom
+
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        // Zoom towards mouse:
+        // (mouse - translate) / scale = grid_point
+        // We want grid_point to remain under mouse after new scale
+        // mx - new_translate = grid_point * new_scale
+        
+        transform.x = mx - (mx - transform.x) * (newScale / transform.k);
+        transform.y = my - (my - transform.y) * (newScale / transform.k);
+        transform.k = newScale;
+        
+        draw();
+    });
+
+    // --- Logic Execution ---
+
+    function loadData() {
+        const txt = document.getElementById('inputData').value;
+        grid = parseInput(txt);
+        width = grid.length > 0 ? grid[0].length : 0;
+        height = grid.length;
+
+        reset();
+
+        // Find Start
+        if (grid.length > 0) {
+            const startX = grid[0].findIndex(c => c === 'S');
+            if (startX !== -1) {
+                p1Beams.add(startX);
+                p2Beams.set(startX, 1n); // Use BigInt for counts just in case, though Kotlin uses Long
+
+                // Mark start in history
+                beamHistory[0] = new Set([startX]);
+            }
+        }
+
+        resizeCanvas();
+        document.getElementById('btnStep').disabled = false;
+        document.getElementById('btnRun').disabled = false;
+        updateUI();
+    }
+
+    function reset() {
+        currentDepth = 0;
+        p1Beams = new Set();
+        p2Beams = new Map();
+        p1Score = 0;
+        beamHistory = [];
+
+        isAutoRunning = false;
+        cancelAnimationFrame(animationFrameId);
+
+        updateUI();
+        draw();
+    }
+
+    function updateUI() {
+        document.getElementById('uiDepth').textContent = currentDepth < height ? currentDepth : "DONE";
+        document.getElementById('uiP1').textContent = p1Score;
+
+        // Sum P2 beams
+        let p2Total = 0n;
+        for (let val of p2Beams.values()) {
+            p2Total += val;
+        }
+        document.getElementById('uiP2').textContent = p2Total.toString();
+
+        if (isAutoRunning) {
+            document.getElementById('btnRun').textContent = "Stop";
+            document.getElementById('btnRun').classList.add('btn-danger');
+        } else {
+            document.getElementById('btnRun').textContent = "Run Auto";
+            document.getElementById('btnRun').classList.remove('btn-danger');
+        }
+    }
+
+    function step() {
+        if (currentDepth >= height) {
+            isAutoRunning = false;
+            updateUI();
+            return;
+        }
+
+        // Logic largely adapted from Kotlin snippet
+        // Process current depth and generate beams for depth + 1
+
+        // 1. Process P1 (Set Logic)
+        const nextP1Beams = new Set();
+        const p1BeamList = []; // For counting size before dedupe
+
+        // "val newBeams = beams.flatMap { beam -> if (this[depth][beam] == '^') listOf(beam - 1, beam + 1) else listOf(beam) }"
+        p1Beams.forEach(beam => {
+            if (beam < 0 || beam >= width) return; // Boundary check
+
+            const char = grid[currentDepth][beam];
+            if (char === '^') {
+                p1BeamList.push(beam - 1);
+                p1BeamList.push(beam + 1);
+            } else {
+                p1BeamList.push(beam);
+            }
+        });
+
+        // "val splitCount = newBeams.size - beams.size"
+        // In Kotlin recursion, it calculates splitCount based on the transition FROM currentDepth TO next.
+        const splitCount = p1BeamList.length - p1Beams.size;
+        p1Score += splitCount;
+
+        // Create next set
+        p1BeamList.forEach(b => nextP1Beams.add(b));
+
+        // 2. Process P2 (Map Logic)
+        const nextP2Beams = new Map();
+
+        // "flatMap { (beam, beamCount) -> if (this[depth][beam] == '^') listOf(beam - 1 to beamCount, beam + 1 to beamCount) else ... }"
+        for (const [beam, count] of p2Beams) {
+            if (beam < 0 || beam >= width) continue;
+
+            const char = grid[currentDepth][beam];
+            if (char === '^') {
+                // Split
+                const left = beam - 1;
+                const right = beam + 1;
+                nextP2Beams.set(left, (nextP2Beams.get(left) || 0n) + count);
+                nextP2Beams.set(right, (nextP2Beams.get(right) || 0n) + count);
+            } else {
+                // Continue
+                nextP2Beams.set(beam, (nextP2Beams.get(beam) || 0n) + count);
+            }
+        }
+
+        // Advance
+        currentDepth++;
+        p1Beams = nextP1Beams;
+        p2Beams = nextP2Beams;
+
+        // Record History for Visualization (using P1 beams as they represent existence)
+        if (currentDepth < height) {
+            beamHistory[currentDepth] = new Set(p1Beams);
+        }
+
+        updateUI();
+        draw();
+    }
+
+    function toggleRun() {
+        if (isAutoRunning) {
+            isAutoRunning = false;
+            cancelAnimationFrame(animationFrameId);
+            updateUI();
+        } else {
+            isAutoRunning = true;
+            updateUI();
+            runLoop();
+        }
+    }
+
+    let lastTime = 0;
+    function runLoop(timestamp) {
+        if (!isAutoRunning) return;
+
+        const speedVal = parseInt(document.getElementById('speedRange').value);
+        const interval = 1000 / (speedVal * 2); // Map 1-20 to speed
+
+        if (!lastTime || timestamp - lastTime > interval) {
+            step();
+            lastTime = timestamp;
+        }
+
+        if (currentDepth < height) {
+            animationFrameId = requestAnimationFrame(runLoop);
+        } else {
+            isAutoRunning = false;
+            updateUI();
+        }
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    window.onload = () => {
+        // Initial setup
+        loadData();
+    };
+
+</script>
+</body>
+</html>
