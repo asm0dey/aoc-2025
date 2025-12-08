@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 8 Visualization: Space Chains</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --panel-bg: #252526;
+            --accent: #61afef; /* Blue */
+            --highlight: #e5c07b; /* Gold/Yellow */
+            --danger: #e06c75;
+            --success: #98c379; /* Green */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        label { font-size: 0.9rem; color: #aaa; display: block; margin-bottom: 5px; }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            resize: vertical;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        /* Stats Panel */
+        .stats-panel {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        .stat-val { font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .val-highlight { color: var(--highlight); }
+        .val-accent { color: var(--accent); }
+
+        /* Controls */
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: filter 0.2s;
+            color: white;
+        }
+
+        .btn-primary { background-color: var(--accent); }
+        .btn-secondary { background-color: #444; }
+        .btn-danger { background-color: var(--danger); }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { filter: brightness(0.5); cursor: not-allowed; }
+
+        input[type="number"] {
+            background: #111; border: 1px solid #444; color: white; padding: 5px; width: 100%; box-sizing: border-box;
+        }
+
+        /* Main Canvas */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background: radial-gradient(circle at center, #222 0%, #111 100%);
+            perspective: 1000px;
+        }
+
+        canvas {
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            background: #000;
+        }
+
+        .overlay-text {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+            color: #666;
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Day 8: Space Chains</h2>
+
+    <div>
+        <label for="inputData">Input Points (x,y,z)</label>
+        <textarea id="inputData" placeholder="10,10,10&#10;20,20,20...">
+162,817,812
+57,618,57
+906,360,560
+592,479,940
+352,342,300
+466,668,158
+542,29,236
+431,825,988
+739,650,466
+52,470,668
+216,146,977
+819,987,18
+117,168,530
+805,96,715
+346,949,466
+970,615,88
+941,993,340
+862,61,35
+984,92,344
+425,690,689
+        </textarea>
+        <div style="display: flex; gap: 5px; margin-top: 5px;">
+            <button class="btn-secondary" style="flex:1;" onclick="loadData()">Load Points</button>
+            <button class="btn-secondary" style="flex:1;" onclick="generateRandom()">Random</button>
+        </div>
+    </div>
+
+    <div>
+        <label>Mode</label>
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <label style="display:inline; color:#ddd; cursor:pointer;"><input type="radio" name="mode" value="p1" checked onchange="updateMode()"> Part 1</label>
+            <label style="display:inline; color:#ddd; cursor:pointer;"><input type="radio" name="mode" value="p2" onchange="updateMode()"> Part 2</label>
+        </div>
+    </div>
+
+    <div id="limitContainer">
+        <label>Connectors Limit</label>
+        <input type="number" id="connectorsLimit" value="1000" min="1">
+    </div>
+
+    <div class="stats-panel">
+        <div class="stat-row">
+            <span>Points:</span>
+            <span id="uiPointCount" class="stat-val">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Pairs Processed:</span>
+            <span id="uiProcessed" class="stat-val">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Active Chains:</span>
+            <span id="uiChainCount" class="stat-val val-highlight">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Result (Size Prod):</span>
+            <span id="uiResult" class="stat-val val-accent">0</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-primary" id="btnStep" onclick="step()" disabled>Step</button>
+        <button class="btn-primary" id="btnRun" onclick="toggleRun()" disabled>Run Auto</button>
+        <button class="btn-danger" onclick="reset()">Reset</button>
+    </div>
+
+    <div>
+        <label>Animation Speed</label>
+        <input type="range" id="speedRange" min="1" max="50" value="5" style="width:100%">
+    </div>
+</div>
+
+<div class="main-content">
+    <canvas id="mainCanvas" width="800" height="800"></canvas>
+    <div class="overlay-text">
+        Visualization of closest pair chaining.<br>
+        Auto-rotating view.<br>
+        Hover over points to see coordinates.
+    </div>
+    <div id="tooltip" style="position: absolute; display: none; background: rgba(0,0,0,0.8); color: white; padding: 5px 8px; border-radius: 4px; font-size: 0.8rem; pointer-events: none; border: 1px solid #555; z-index: 100; font-family: monospace;"></div>
+</div>
+
+<script>
+    // --- Logic & State ---
+    class Point3 {
+        constructor(x, y, z, id) {
+            this.x = x; this.y = y; this.z = z;
+            this.id = id;
+            this.color = `hsl(${Math.random() * 360}, 70%, 50%)`;
+        }
+        distanceTo(other) {
+            return Math.sqrt(
+                Math.pow(this.x - other.x, 2) +
+                Math.pow(this.y - other.y, 2) +
+                Math.pow(this.z - other.z, 2)
+            );
+        }
+    }
+
+    let points = [];
+    let sortedPairs = [];
+    let chains = []; // Array of Sets (simulated by Arrays of IDs for simplicity)
+    let drawnEdges = [];
+
+    // Animation / Loop State
+    let pairIndex = 0;
+    let connectorsLimit = 1000;
+    let selectedMode = 'p1';
+    let isAutoRunning = false;
+    let reqId;
+
+    // View State
+    let rotationAngle = 0;
+    let scale = 1;
+    let center = {x:0, y:0, z:0};
+
+    // Interaction State
+    let lastProjectedPoints = [];
+    let hoveredPoint = null;
+    let isHovering = false;
+
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- Interaction ---
+
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const mx = (e.clientX - rect.left) * scaleX;
+        const my = (e.clientY - rect.top) * scaleY;
+
+        // Find closest point
+        let closest = null;
+        let minInfo = Infinity;
+
+        // Reverse iterate to hit check items drawn on top (higher index usually means later draw, but we sorted by zIndex)
+        // We sorted projected points by zIndex descending (back to front), so last items are front-most.
+        for (let i = lastProjectedPoints.length - 1; i >= 0; i--) {
+            const p = lastProjectedPoints[i];
+            const dist = Math.sqrt(Math.pow(p.x - mx, 2) + Math.pow(p.y - my, 2));
+            if (dist < 15) { // Hit radius
+                // Use zIndex to break ties if multiple under cursor?
+                // Since we iterate front-to-back (if we reversed the sorted array), the first hit is the front-most.
+                // Our array is sorted back-to-front. So last element is front.
+                closest = p.origin;
+                break;
+            }
+        }
+
+        if (closest !== hoveredPoint) {
+            hoveredPoint = closest;
+            isHovering = !!closest;
+        }
+
+        const tooltip = document.getElementById('tooltip');
+        if (hoveredPoint) {
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top = (e.clientY + 15) + 'px';
+            tooltip.textContent = `[${hoveredPoint.x}, ${hoveredPoint.y}, ${hoveredPoint.z}]`;
+        } else {
+            tooltip.style.display = 'none';
+        }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        hoveredPoint = null;
+        isHovering = false;
+        document.getElementById('tooltip').style.display = 'none';
+    });
+
+    // --- Core Logic ---
+
+    function parseInput(text) {
+        let idCounter = 0;
+        return text.trim().split(/\n/).map(line => {
+            const parts = line.split(',').map(s => parseInt(s.trim()));
+            if (parts.length === 3 && !isNaN(parts[0])) {
+                return new Point3(parts[0], parts[1], parts[2], idCounter++);
+            }
+            return null;
+        }).filter(p => p !== null);
+    }
+
+    function initLogic() {
+        // Calculate all pairs
+        const allPairs = [];
+        for (let i = 0; i < points.length; i++) {
+            for (let j = i + 1; j < points.length; j++) {
+                allPairs.push({
+                    a: points[i],
+                    b: points[j],
+                    dist: points[i].distanceTo(points[j])
+                });
+            }
+        }
+        // Sort by distance
+        allPairs.sort((pairA, pairB) => pairA.dist - pairB.dist);
+
+        // Limit connectors
+        if (selectedMode === 'p1') {
+            connectorsLimit = parseInt(document.getElementById('connectorsLimit').value) || 1000;
+            sortedPairs = allPairs.slice(0, connectorsLimit);
+        } else {
+            connectorsLimit = allPairs.length;
+            sortedPairs = allPairs;
+        }
+
+        // Init chains: initially no chains (logic says check if chain exists)
+        // Wait, logic says:
+        // if aChain == null && bChain == null -> create new chain
+        // Logic handles merging.
+        // For viz, let's keep track of which Set object a point belongs to.
+        chains = [];
+    }
+
+    function processStep() {
+        if (pairIndex >= sortedPairs.length) {
+            isAutoRunning = false;
+            updateUI();
+            return;
+        }
+
+        const pair = sortedPairs[pairIndex];
+        const a = pair.a;
+        const b = pair.b;
+
+        // Find chains
+        let aChainIndex = chains.findIndex(c => c.has(a.id));
+        let bChainIndex = chains.findIndex(c => c.has(b.id));
+
+        const aChain = aChainIndex !== -1 ? chains[aChainIndex] : null;
+        const bChain = bChainIndex !== -1 ? chains[bChainIndex] : null;
+
+        let action = "skip"; // skip, create, merge, add
+
+        if (aChain && aChain === bChain) {
+            // Already connected
+            action = "skip";
+        } else if (aChain && bChain) {
+            // Merge bChain into aChain
+            bChain.forEach(pid => aChain.add(pid));
+            chains.splice(bChainIndex, 1);
+            // Update colors
+            const targetColor = a.color; // Use A's color for the merged chain
+            // We need to update colors of points in B chain
+            // But points store their color.
+            // Let's brute force color update for visualization
+            points.forEach(p => {
+                if(aChain.has(p.id)) p.color = targetColor;
+            });
+            action = "merge";
+            drawnEdges.push(pair);
+        } else if (!aChain && !bChain) {
+            // New Chain
+            const newSet = new Set();
+            newSet.add(a.id);
+            newSet.add(b.id);
+            chains.push(newSet);
+            // Sync color
+            b.color = a.color;
+            action = "create";
+            drawnEdges.push(pair);
+        } else if (aChain) {
+            // Add B to A chain
+            aChain.add(b.id);
+            b.color = a.color;
+            action = "add";
+            drawnEdges.push(pair);
+        } else if (bChain) {
+            // Add A to B chain
+            bChain.add(a.id);
+            a.color = b.color;
+            action = "add";
+            drawnEdges.push(pair);
+        }
+
+        pairIndex++;
+        updateResult();
+
+        // Part 2 Stop Condition
+        if (selectedMode === 'p2') {
+            if (chains.length === 1 && chains[0].size === points.length) {
+                isAutoRunning = false;
+                return;
+            }
+        }
+    }
+
+    function updateResult() {
+        if (chains.length === 0) return 0;
+        // Logic: return chains.map { it.size }.sortedDescending().take(3).reduce(Int::times)
+        const sizes = chains.map(c => c.size).sort((a,b) => b-a);
+        const top3 = sizes.slice(0, 3);
+        const res = top3.reduce((acc, v) => acc * v, 1);
+        document.getElementById('uiResult').textContent = res;
+        document.getElementById('uiChainCount').textContent = chains.length;
+    }
+
+    // --- Visualization ---
+
+    function project(p, width, height, angle) {
+        // Simple rotation around Y axis
+        const rad = angle;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        // Center relative AND pre-scaled to normalize world size
+        // This ensures coordinates are roughly within -200..200 range
+        let x = (p.x - center.x) * scale;
+        let y = (p.y - center.y) * scale;
+        let z = (p.z - center.z) * scale;
+
+        // Rotate Y
+        const rx = x * cos - z * sin;
+        const rz = x * sin + z * cos;
+        const ry = y;
+
+        // Simple perspective
+        const fov = 800; 
+        const dist = fov + rz;
+
+        // Clipping: if point is behind camera or too close, mark invisible
+        if (dist < 100) {
+            return { visible: false, zIndex: rz };
+        }
+
+        const scaleFactor = fov / dist;
+
+        const x2d = rx * scaleFactor + width / 2;
+        const y2d = ry * scaleFactor + height / 2;
+
+        return { visible: true, x: x2d, y: y2d, scale: scaleFactor, zIndex: rz };
+    }
+
+    function draw() {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (!isHovering) {
+            rotationAngle += 0.001;
+        }
+
+        // Project all points
+        const projPoints = points.map(p => {
+            return { ...project(p, canvas.width, canvas.height, rotationAngle), origin: p };
+        });
+
+        // Draw Connections using ID-indexed array (before sorting)
+        ctx.lineWidth = 1.5; // Slightly thicker lines for visibility
+        drawnEdges.forEach(pair => {
+            const p1 = projPoints[pair.a.id];
+            const p2 = projPoints[pair.b.id];
+
+            // Skip if either point is clipped or invalid
+            if (!p1 || !p2 || !p1.visible || !p2.visible) return;
+
+            // Simple depth shading for lines
+            // zIndex (rz) is approx -200 to 200
+            // Map -200 (close) -> 1.0 alpha
+            // Map +200 (far) -> 0.3 alpha
+            const depth = (p1.zIndex + p2.zIndex) / 2;
+            // Normalize depth from -200..200 to 0..1
+            const normalizedDepth = (depth + 200) / 400; 
+            const alpha = 1.0 - (normalizedDepth * 0.7); // 1.0 down to 0.3
+            const safeAlpha = Math.max(0.1, Math.min(1.0, alpha));
+
+            ctx.strokeStyle = pair.a.color || '#ffffff'; 
+            ctx.globalAlpha = safeAlpha;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+        });
+        ctx.globalAlpha = 1.0;
+        
+        // Create a sorted copy for drawing points (back to front)
+        // Filter out invisible points
+        const sortedProjPoints = projPoints.filter(p => p.visible);
+        sortedProjPoints.sort((a, b) => b.zIndex - a.zIndex);
+        lastProjectedPoints = sortedProjPoints;
+
+        // Draw Points (sorted by Z for crude occlusion)
+        sortedProjPoints.forEach(p => {
+            const isHovered = (hoveredPoint && p.origin.id === hoveredPoint.id);
+            const r = isHovered ? 8 : Math.max(2, 6 * p.scale);
+            
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            ctx.fillStyle = isHovered ? '#fff' : p.origin.color;
+            ctx.fill();
+            
+            // Glow / Stroke
+            if (p.scale > 0.8 || isHovered) {
+                ctx.strokeStyle = isHovered ? '#ffff00' : '#fff';
+                ctx.lineWidth = isHovered ? 2 : 1;
+                ctx.stroke();
+            }
+        });
+
+        requestAnimationFrame(draw); // Always animate view
+    }
+    
+    function updateMode() {
+        const radios = document.getElementsByName('mode');
+        for(const r of radios) {
+            if (r.checked) selectedMode = r.value;
+        }
+        
+        const limitDiv = document.getElementById('limitContainer');
+        if (selectedMode === 'p1') {
+            limitDiv.style.display = 'block';
+        } else {
+            limitDiv.style.display = 'none';
+        }
+        
+        loadData(); // Re-init everything
+    }
+
+    function loadData() {
+        const txt = document.getElementById('inputData').value;
+        points = parseInput(txt);
+        reset();
+
+        // Calculate center for camera
+        if (points.length > 0) {
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            let minZ = Infinity, maxZ = -Infinity;
+            points.forEach(p => {
+                minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+                minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+                minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+            });
+            center = {
+                x: (minX + maxX) / 2,
+                y: (minY + maxY) / 2,
+                z: (minZ + maxZ) / 2
+            };
+            // Estimate scale
+            const maxDim = Math.max(maxX-minX, maxY-minY, maxZ-minZ);
+            scale = 400 / (maxDim || 1);
+        }
+
+        initLogic();
+        document.getElementById('uiPointCount').textContent = points.length;
+        document.getElementById('btnStep').disabled = false;
+        document.getElementById('btnRun').disabled = false;
+    }
+
+    function generateRandom() {
+        let str = "";
+        for(let i=0; i<150; i++) {
+            str += `${Math.floor(Math.random()*1000)},${Math.floor(Math.random()*1000)},${Math.floor(Math.random()*1000)}\n`;
+        }
+        document.getElementById('inputData').value = str;
+        loadData();
+    }
+
+    function reset() {
+        pairIndex = 0;
+        chains = [];
+        drawnEdges = [];
+        isAutoRunning = false;
+        clearTimeout(reqId);
+        // Reset colors
+        points.forEach((p, idx) => p.color = `hsl(${(idx * 137.5) % 360}, 70%, 50%)`); // Golden angle distribution for colors
+        updateUI();
+    }
+
+    function step() {
+        if(pairIndex < sortedPairs.length) {
+            processStep();
+        }
+        updateUI();
+    }
+
+    function updateUI() {
+        document.getElementById('uiProcessed').textContent = `${pairIndex} / ${sortedPairs.length}`;
+        if (isAutoRunning) {
+            document.getElementById('btnRun').textContent = "Stop";
+            document.getElementById('btnRun').classList.add('btn-danger');
+        } else {
+            document.getElementById('btnRun').textContent = "Run Auto";
+            document.getElementById('btnRun').classList.remove('btn-danger');
+        }
+    }
+
+    function toggleRun() {
+        if (isAutoRunning) {
+            isAutoRunning = false;
+            updateUI();
+        } else {
+            isAutoRunning = true;
+            updateUI();
+            runLoop();
+        }
+    }
+
+    function runLoop() {
+        if (!isAutoRunning) return;
+
+        const speedVal = parseInt(document.getElementById('speedRange').value);
+
+        // Adjustable speed logic:
+        // speed 1-20: Slow mode (delay between steps)
+        // speed 21-50: Fast mode (multiple steps per frame)
+
+        let delay = 0;
+        let stepsToProcess = 1;
+
+        if (speedVal <= 20) {
+            // 1 -> 500ms, 20 -> 25ms
+            delay = 500 / speedVal;
+        } else {
+            // 21 -> 2 steps, 50 -> 31 steps
+            stepsToProcess = speedVal - 19;
+            delay = 10;
+        }
+
+        for(let i=0; i<stepsToProcess; i++) {
+            if(pairIndex < sortedPairs.length) {
+                processStep();
+            } else {
+                isAutoRunning = false;
+                break;
+            }
+        }
+
+        updateUI();
+
+        if (isAutoRunning) {
+            reqId = setTimeout(runLoop, delay);
+        }
+    }
+
+    // Init
+    window.onload = () => {
+        // Start draw loop
+        draw();
+        // Sync mode from UI state to ensure JS matches HTML (handles browser form retention)
+        updateMode();
+    };
+
+</script>
+</body>
+</html>
