@@ -172,7 +172,7 @@
 
     <div id="limitContainer">
         <label>Connectors Limit</label>
-        <input type="number" id="connectorsLimit" value="1000" min="1">
+        <input type="number" id="connectorsLimit" value="1000" min="1" onchange="loadData()">
     </div>
 
     <div class="stats-panel">
@@ -485,7 +485,7 @@
         });
 
         // Draw Connections using ID-indexed array (before sorting)
-        ctx.lineWidth = 1.5; // Slightly thicker lines for visibility
+        ctx.lineWidth = 3; // Slightly thicker lines for visibility
         drawnEdges.forEach(pair => {
             const p1 = projPoints[pair.a.id];
             const p2 = projPoints[pair.b.id];
