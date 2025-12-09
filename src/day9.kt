@@ -59,5 +59,4 @@ fun main() {
     println(part1(readFile("day9")))
     check(part2(readFile("day9_t1")) == 24L)
     println(part2(readFile("day9")))
-
 }

@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 9 Visualization: Max Rectangle in Polygon</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --panel-bg: #252526;
+            --accent: #9d79bc;
+            --highlight: #e5c07b;
+            --success: #98c379;
+            --danger: #e06c75;
+            --p1-color: #61afef; /* Blue for Part 1 */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        label { font-size: 0.9rem; color: #aaa; display: block; margin-bottom: 5px; }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            resize: vertical;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        .stats-panel {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        .stat-val { font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .val-p1 { color: var(--p1-color); }
+        .val-p2 { color: var(--success); }
+        .val-current { color: #fff; }
+
+        .status-badge { padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; font-weight: bold; }
+        .status-idle { background: #444; color: #ccc; }
+        .status-p1 { background: var(--p1-color); color: #111; }
+        .status-p2 { background: var(--highlight); color: #111; }
+        .status-done { background: var(--success); color: #111; }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: filter 0.2s;
+            color: white;
+        }
+
+        .btn-primary { background-color: var(--accent); }
+        .btn-secondary { background-color: #444; }
+        .btn-danger { background-color: var(--danger); }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { filter: brightness(0.5); cursor: not-allowed; }
+
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background-color: #111;
+            overflow: hidden;
+        }
+
+        canvas {
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+        }
+
+        .overlay-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+            color: #666;
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Day 9: Polygon Areas</h2>
+
+    <div>
+        <label for="inputData">Points (x,y)</label>
+        <textarea id="inputData" placeholder="1,1&#10;5,1&#10;5,5&#10;1,5">
+7,1
+11,1
+11,7
+9,7
+9,5
+2,5
+2,3
+7,3
+        </textarea>
+        <button class="btn-secondary" style="width:100%; margin-top:5px;" onclick="loadData()">Load Points</button>
+    </div>
+
+    <div class="stats-panel">
+        <div class="stat-row">
+            <span>Points:</span>
+            <span id="uiPointCount" class="stat-val">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Status:</span>
+            <span id="uiStatus" class="status-badge status-idle">IDLE</span>
+        </div>
+        <hr style="border-color:#444; opacity:0.5">
+        <div class="stat-row">
+            <span>Checking Area:</span>
+            <span id="uiCurrentArea" class="stat-val val-current">-</span>
+        </div>
+        <div class="stat-row">
+            <span style="color:var(--p1-color)">Part 1 (Max Any):</span>
+            <span id="uiP1" class="stat-val val-p1">-</span>
+        </div>
+        <div class="stat-row">
+            <span style="color:var(--success)">Part 2 (Max Valid):</span>
+            <span id="uiP2" class="stat-val val-p2">-</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-primary" id="btnStep" onclick="step(); draw();" disabled>Step</button>
+        <button class="btn-primary" id="btnRun" onclick="toggleRun()" disabled>Run Auto</button>
+        <button class="btn-danger" onclick="reset()">Reset</button>
+    </div>
+
+    <div>
+        <label>Speed (Slow &larr; &rarr; Fast)</label>
+        <!-- 1 = Very Slow (wait frames), 5 = 1 step/frame, 100 = 100 steps/frame -->
+        <input type="range" id="speedRange" min="1" max="100" value="5" style="width:100%">
+    </div>
+</div>
+
+<div class="main-content">
+    <canvas id="mainCanvas"></canvas>
+    <div class="overlay-info">
+        Blue: Part 1 Best<br>
+        Green: Part 2 Best<br>
+        Yellow: Checking
+    </div>
+</div>
+
+<script>
+    // --- Logic & State ---
+    let points = [];
+    let candidates = []; // List of {p1, p2, area}
+
+    // Phases: IDLE -> P1_SEARCH -> TRANSITION -> P2_SEARCH -> DONE
+    let phase = 'IDLE';
+
+    // Indices
+    let searchIndex = 0; // Shared index for loops
+
+    // Results
+    let p1Best = null; // {p1, p2, area}
+    let p2Best = null; // {p1, p2, area}
+    let currentCheck = null; // For drawing current scan
+
+    // Viewport
+    let minX=0, maxX=0, minY=0, maxY=0;
+    let scale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+    let canvasWidth = 0;
+    let canvasHeight = 0;
+
+    // Execution
+    let isRunning = false;
+    let frameCounter = 0; // For throttling slow speeds
+
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        draw();
+    });
+
+    function resizeCanvas() {
+        const container = document.querySelector('.main-content');
+        if(!container) return;
+        canvas.width = container.clientWidth - 40;
+        canvas.height = container.clientHeight - 40;
+        canvasWidth = canvas.width;
+        canvasHeight = canvas.height;
+        calcTransform();
+    }
+
+    // --- Math ---
+    function area(a, b) {
+        return (Math.abs(a.x - b.x) + 1) * (Math.abs(a.y - b.y) + 1);
+    }
+
+    function onSegment(p, a, b) {
+        const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+        if (Math.abs(cross) > 1e-9) return false;
+        const dot = (p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y);
+        if (dot < 0) return false;
+        const sqLen = (b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y);
+        if (dot > sqLen) return false;
+        return true;
+    }
+
+    function isStrictlyInside(p, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const xi = poly[i].x, yi = poly[i].y;
+            const xj = poly[j].x, yj = poly[j].y;
+            const intersect = ((yi > p.y) !== (yj > p.y)) &&
+                (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    function isPointInOrOnPolygon(p, poly) {
+        for (let i = 0; i < poly.length; i++) {
+            const p1 = poly[i];
+            const p2 = poly[(i + 1) % poly.length];
+            if (onSegment(p, p1, p2)) return true;
+        }
+        return isStrictlyInside(p, poly);
+    }
+
+    function crossProduct(o, a, b) {
+        return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    }
+
+    function segmentsCross(a, b, c, d) {
+        const cp1 = crossProduct(a, b, c);
+        const cp2 = crossProduct(a, b, d);
+        const cp3 = crossProduct(c, d, a);
+        const cp4 = crossProduct(c, d, b);
+        if (((cp1 > 0 && cp2 < 0) || (cp1 < 0 && cp2 > 0)) &&
+            ((cp3 > 0 && cp4 < 0) || (cp3 < 0 && cp4 > 0))) {
+            return true;
+        }
+        return false;
+    }
+
+    function isRectInPolygon(rP1, rP2, poly) {
+        const x1 = Math.min(rP1.x, rP2.x);
+        const y1 = Math.min(rP1.y, rP2.y);
+        const x2 = Math.max(rP1.x, rP2.x);
+        const y2 = Math.max(rP1.y, rP2.y);
+
+        const corners = [{x:x1, y:y1}, {x:x2, y:y1}, {x:x2, y:y2}, {x:x1, y:y2}];
+        for (let c of corners) {
+            if (!isPointInOrOnPolygon(c, poly)) return false;
+        }
+        const center = {x: (x1+x2)/2, y: (y1+y2)/2};
+        if (!isStrictlyInside(center, poly)) return false;
+        for (let p of poly) {
+            if (p.x > x1 && p.x < x2 && p.y > y1 && p.y < y2) return false;
+        }
+        const rEdges = [
+            {p1:{x:x1,y:y1}, p2:{x:x2,y:y1}}, {p1:{x:x2,y:y1}, p2:{x:x2,y:y2}},
+            {p1:{x:x2,y:y2}, p2:{x:x1,y:y2}}, {p1:{x:x1,y:y2}, p2:{x:x1,y:y1}}
+        ];
+        for (let i = 0; i < poly.length; i++) {
+            const pA = poly[i];
+            const pB = poly[(i + 1) % poly.length];
+            for (let edge of rEdges) {
+                if (segmentsCross(pA, pB, edge.p1, edge.p2)) return false;
+            }
+        }
+        return true;
+    }
+
+    // --- Core ---
+
+    function loadData() {
+        const txt = document.getElementById('inputData').value;
+        const lines = txt.trim().split(/\s+/);
+
+        points = [];
+        lines.forEach(line => {
+            const parts = line.split(',');
+            if (parts.length === 2) {
+                const px = parseInt(parts[0]);
+                const py = parseInt(parts[1]);
+                if(!isNaN(px) && !isNaN(py)) points.push({x: px, y: py});
+            }
+        });
+
+        if (points.length < 3) {
+            alert("Need at least 3 points.");
+            return;
+        }
+
+        // Generate all pairs
+        candidates = [];
+        for(let i=0; i<points.length; i++) {
+            for(let j=i+1; j<points.length; j++) {
+                candidates.push({
+                    p1: points[i],
+                    p2: points[j],
+                    area: area(points[i], points[j])
+                });
+            }
+        }
+
+        resizeCanvas();
+        reset();
+
+        // Start Part 1
+        phase = 'P1_SEARCH';
+        updateStatus();
+
+        document.getElementById('uiPointCount').textContent = points.length;
+        document.getElementById('btnStep').disabled = false;
+        document.getElementById('btnRun').disabled = false;
+
+        draw();
+    }
+
+    function calcTransform() {
+        if (points.length === 0) return;
+        minX = Math.min(...points.map(p => p.x));
+        maxX = Math.max(...points.map(p => p.x));
+        minY = Math.min(...points.map(p => p.y));
+        maxY = Math.max(...points.map(p => p.y));
+
+        const w = Math.max(1, maxX - minX);
+        const h = Math.max(1, maxY - minY);
+        const padW = w * 0.2 + 2;
+        const padH = h * 0.2 + 2;
+
+        const scaleX = canvasWidth / (w + padW);
+        const scaleY = canvasHeight / (h + padH);
+        scale = Math.min(scaleX, scaleY);
+        if (scale <= 0) scale = 1;
+
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        offsetX = canvasWidth / 2 - cx * scale;
+        offsetY = canvasHeight / 2 - cy * scale;
+    }
+
+    function toScreen(x, y) {
+        return { x: x * scale + offsetX, y: y * scale + offsetY };
+    }
+
+    function reset() {
+        isRunning = false;
+        phase = 'IDLE';
+        searchIndex = 0;
+        p1Best = null;
+        p2Best = null;
+        currentCheck = null;
+        updateStatus();
+        document.getElementById('uiP1').textContent = "-";
+        document.getElementById('uiP2').textContent = "-";
+        document.getElementById('uiCurrentArea').textContent = "-";
+        draw();
+    }
+
+    function updateStatus() {
+        const el = document.getElementById('uiStatus');
+        if (phase === 'P1_SEARCH') {
+            el.textContent = "SEARCHING P1";
+            el.className = "status-badge status-p1";
+        } else if (phase === 'TRANSITION') {
+            el.textContent = "PREPARING P2";
+            el.className = "status-badge status-idle";
+        } else if (phase === 'P2_SEARCH') {
+            el.textContent = "SEARCHING P2";
+            el.className = "status-badge status-p2";
+        } else if (phase === 'DONE') {
+            el.textContent = "COMPLETE";
+            el.className = "status-badge status-done";
+        } else {
+            el.textContent = "IDLE";
+            el.className = "status-badge status-idle";
+        }
+    }
+
+    function step() {
+        // Auto-load if IDLE (e.g. after Reset)
+        if (phase === 'IDLE') {
+            loadData();
+            // loadData sets phase to P1_SEARCH, so we can fall through or return to let next click work
+            // But let's run one step immediately to be responsive
+        }
+
+        if (phase === 'P1_SEARCH') {
+            stepP1();
+        } else if (phase === 'TRANSITION') {
+            // Sort for P2
+            candidates.sort((a, b) => b.area - a.area);
+            searchIndex = 0;
+            phase = 'P2_SEARCH';
+            updateStatus();
+            // Fallthrough: Execute first P2 step immediately so we don't need an extra click
+            stepP2();
+        } else if (phase === 'P2_SEARCH') {
+            stepP2();
+        }
+        // Removed draw() from here to control it in loop/onclick
+    }
+
+    function stepP1() {
+        if (searchIndex >= candidates.length) {
+            phase = 'TRANSITION';
+            updateStatus();
+            return;
+        }
+
+        const cand = candidates[searchIndex];
+        currentCheck = cand;
+
+        if (!p1Best || cand.area > p1Best.area) {
+            p1Best = cand;
+            document.getElementById('uiP1').textContent = p1Best.area;
+        }
+        document.getElementById('uiCurrentArea').textContent = cand.area;
+        searchIndex++;
+    }
+
+    function stepP2() {
+        if (searchIndex >= candidates.length) {
+            phase = 'DONE';
+            updateStatus();
+            stopRun();
+            return;
+        }
+
+        const cand = candidates[searchIndex];
+        currentCheck = cand;
+        document.getElementById('uiCurrentArea').textContent = cand.area;
+
+        const valid = isRectInPolygon(cand.p1, cand.p2, points);
+        if (valid) {
+            p2Best = cand;
+            document.getElementById('uiP2').textContent = p2Best.area;
+            phase = 'DONE';
+            updateStatus();
+            stopRun();
+        } else {
+            searchIndex++;
+        }
+    }
+
+    function draw() {
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (points.length === 0) return;
+
+        // Polygon
+        ctx.beginPath();
+        const start = toScreen(points[0].x, points[0].y);
+        ctx.moveTo(start.x, start.y);
+        for(let i=1; i<points.length; i++) {
+            const p = toScreen(points[i].x, points[i].y);
+            ctx.lineTo(p.x, p.y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = '#5c6370';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(97, 175, 239, 0.1)';
+        ctx.fill();
+
+        // Points
+        ctx.fillStyle = '#fff';
+        for(let p of points) {
+            const sc = toScreen(p.x, p.y);
+            ctx.beginPath();
+            ctx.arc(sc.x, sc.y, 4, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // 1. Draw Best P1 (Permanent if found)
+        if (p1Best) {
+            drawRect(p1Best, '#61afef', 'rgba(97, 175, 239, 0.2)', 2);
+        }
+
+        // 2. Draw Current Checking Rect
+        if (phase !== 'DONE' && currentCheck) {
+            // P1 search: very faint
+            // P2 search: Yellow
+            const color = (phase === 'P1_SEARCH') ? '#555' : '#e5c07b';
+            const fill = (phase === 'P1_SEARCH') ? 'rgba(255,255,255,0.05)' : 'rgba(229, 192, 123, 0.2)';
+            drawRect(currentCheck, color, fill, 1);
+        }
+
+        // 3. Draw Best P2 (On top)
+        if (p2Best) {
+            drawRect(p2Best, '#98c379', 'rgba(152, 195, 121, 0.5)', 3);
+        }
+    }
+
+    function drawRect(rect, stroke, fill, width) {
+        const p1 = toScreen(rect.p1.x, rect.p1.y);
+        const p2 = toScreen(rect.p2.x, rect.p2.y);
+        const x = Math.min(p1.x, p2.x);
+        const y = Math.min(p1.y, p2.y);
+        const w = Math.abs(p1.x - p2.x);
+        const h = Math.abs(p1.y - p2.y);
+
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = width;
+        ctx.fillStyle = fill;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
+    }
+
+    function toggleRun() {
+        if (isRunning) {
+            stopRun();
+        } else {
+            // If finished, reset state to start over
+            if (phase === 'DONE') reset();
+            
+            // If idle (fresh load or reset), load data which initializes phases
+            // loadData() calls reset() internally which sets isRunning=false, 
+            // so we must set isRunning=true AFTER this call.
+            if (phase === 'IDLE') loadData(); 
+            
+            isRunning = true;
+            document.getElementById('btnRun').textContent = "Stop";
+            document.getElementById('btnRun').classList.add('btn-danger');
+            loop();
+        }
+    }
+
+    function stopRun() {
+        isRunning = false;
+        document.getElementById('btnRun').textContent = "Run Auto";
+        document.getElementById('btnRun').classList.remove('btn-danger');
+    }
+
+    function loop() {
+        if (!isRunning) return;
+        
+        const rawSpeed = parseInt(document.getElementById('speedRange').value);
+        
+        // Logic for "Slow" vs "Fast"
+        // If speed < 5, we throttle: wait (6 - speed) frames before 1 step
+        // If speed >= 5, we do (speed - 4) steps per frame (approx) or exponential
+        
+        let stepsToPerform = 0;
+        
+        if (rawSpeed < 5) {
+            // Slow mode: Throttle
+            const waitFrames = (6 - rawSpeed) * 5; // e.g. speed 1 => wait 25 frames
+            frameCounter++;
+            if (frameCounter >= waitFrames) {
+                frameCounter = 0;
+                stepsToPerform = 1;
+            }
+        } else {
+            // Fast mode
+            // Map 5..100 to 1..Many
+            // Let's make it non-linear for better control
+            const val = rawSpeed - 4;
+            // 1 to 96
+            // let's do somewhat exponential
+            if (val < 10) stepsToPerform = val; // 1..9
+            else stepsToPerform = Math.floor(Math.pow(val, 1.5)); // fast ramp up
+        }
+
+        for (let k=0; k<stepsToPerform; k++) {
+            if (!isRunning) break;
+            if (phase === 'DONE') {
+                stopRun();
+                break;
+            }
+            step();
+        }
+        
+        // Draw only once per frame, and only if we actually stepped or if it's a throttle frame (to keep UI responsive)
+        draw();
+        
+        if (isRunning) requestAnimationFrame(loop);
+    }
+    
+    // Init
+    window.onload = function() {
+        loadData(); // Auto-load data on start so Step button works immediately
+    };
+
+</script>
+</body>
+</html>
