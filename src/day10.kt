@@ -1,5 +1,4 @@
-import org.chocosolver.solver.Model
-import org.chocosolver.solver.Solution
+import org.ojalgo.optimisation.ExpressionsBasedModel
 import kotlin.math.pow
 import kotlin.time.measureTime
 
@@ -56,8 +55,6 @@ fun main() {
         val parsedInput = input
             .map { it.split(" ").drop(1) }
             .map {
-//                val binString = it.first().drop(1).dropLast(1).map { if (it == '#') 1 else 0 }.joinToString("")
-//                val bin = binString.toInt(2)
                 val buttons = it.dropLast(1).map {
                     it.drop(1).dropLast(1).split(',').map { it.toInt() }
                 }
@@ -66,10 +63,13 @@ fun main() {
             }
         // a{n} +b{m,k} +c{k} = {n,m,k}
         // (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
-
         return parsedInput.sumOf { (buttons, targetCounterState) ->
-            val model = Model()
-            val ks = model.intVarArray(buttons.size, 0, targetCounterState.max())
+            val model = ExpressionsBasedModel()
+            val maxValue = targetCounterState.max().toDouble()
+            val ks = Array(buttons.size) {
+                model.newVariable("button_$it").integer().lower(0).upper(maxValue)
+            }
+
             for (counterIndex in targetCounterState.indices) {
                 buttons
                     .mapIndexed { index, counters -> if (counters.contains(counterIndex)) index else -1 }
@@ -77,21 +77,19 @@ fun main() {
                     .map { ks[it] }
                     .toTypedArray()
                     .let {
-                        model.sum(it, "=", targetCounterState[counterIndex]).post()
+                        val addExpression =
+                            model.addExpression("sum_$counterIndex").level(targetCounterState[counterIndex])
+                        for (variable in it) addExpression[variable] = 1.0
                     }
             }
-            val maxSum = model.intVar("maxSum", targetCounterState.max(), targetCounterState.max() * buttons.size)
-            model.sum(ks, "=", maxSum).post()
-            var bestSolLength = Int.MAX_VALUE
-            while (model.solver.solve()) {
-                val intVal = Solution(model).record().getIntVal(maxSum)
-                if (intVal < bestSolLength) {
-                    bestSolLength = intVal
-                }
-            }
-            bestSolLength
+            val total = model.addExpression("total")
+                .weight(1.0)
+                .lower(maxValue)
+                .upper(maxValue * buttons.size)
+            ks.forEach { total[it] = 1.0 }
+            val minimise = model.minimise()
+            (0..<minimise.size()).map { minimise[it.toLong()] }.sumOf { it.toInt() }
         }
-
     }
 
     val testInput = """[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
