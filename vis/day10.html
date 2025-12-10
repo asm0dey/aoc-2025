@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 10 Visualization: Logic & Counters</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --panel-bg: #252526;
+            --accent: #d19a66; /* Orange/Gold */
+            --highlight: #61afef; /* Blue */
+            --success: #98c379; /* Green */
+            --danger: #e06c75; /* Red */
+            --lamp-off: #333;
+            --lamp-on: #e5c07b;
+        }
+
+        body {
+            font-family: 'Segoe UI', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        label { font-size: 0.9rem; color: #aaa; display: block; margin-bottom: 5px; }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            resize: vertical;
+            padding: 5px;
+            box-sizing: border-box;
+            font-size: 0.8rem;
+            white-space: pre;
+            overflow: auto;
+        }
+
+        .stats-panel {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        .stat-val { font-weight: bold; }
+        .val-success { color: var(--success); }
+        .val-process { color: var(--highlight); }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            background-color: #444;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #555; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-primary { background-color: var(--highlight); color: #111; }
+        .btn-primary:hover { background-color: #4d8bbd; }
+        .btn-danger { background-color: var(--danger); color: #fff; }
+        .btn-danger:hover { background-color: #c94f58; }
+
+        .scenario-nav {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            background: #111;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .scenario-nav span { flex: 1; text-align: center; font-size: 0.9rem; color: #888; }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            align-items: center;
+            overflow-y: auto;
+        }
+
+        .machine-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+            width: 100%;
+            max-width: 900px;
+            margin-top: 20px;
+        }
+
+        /* Elements */
+        .lamp-row {
+            display: flex;
+            gap: 10px;
+            padding: 20px;
+            background: #222;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .lamp {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--lamp-off);
+            box-shadow: inset 0 0 10px #000;
+            border: 2px solid #555;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .lamp.on {
+            background-color: var(--lamp-on);
+            box-shadow: 0 0 15px var(--lamp-on);
+            border-color: #fff;
+        }
+        .lamp-target-ring {
+            position: absolute;
+            top: -6px; left: -6px; right: -6px; bottom: -6px;
+            border-radius: 50%;
+            border: 2px dashed #555;
+            pointer-events: none;
+        }
+        .lamp-target-ring.target-on { border-color: var(--success); }
+
+        .bar-chart {
+            display: flex;
+            gap: 10px;
+            height: 200px;
+            align-items: flex-end;
+            padding: 20px;
+            background: #222;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .bar-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 40px;
+            height: 100%;
+            justify-content: flex-end;
+            position: relative;
+        }
+        .bar-track {
+            width: 100%;
+            height: 100%;
+            background: #333;
+            position: relative;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .bar-fill {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%;
+            background: var(--highlight);
+            transition: height 0.2s, background-color 0.2s;
+        }
+        .bar-target {
+            position: absolute;
+            left: 0; width: 100%;
+            height: 2px;
+            background: #fff;
+            z-index: 2;
+            box-shadow: 0 0 4px #fff;
+        }
+        .bar-label {
+            margin-top: 5px;
+            font-size: 0.8rem;
+            color: #888;
+        }
+        .bar-val {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 5px;
+            font-size: 0.8rem;
+            color: white;
+            z-index: 3;
+            text-shadow: 0 1px 2px black;
+        }
+
+        .button-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+        }
+        .btn-unit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        .control-btn {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(145deg, #333, #222);
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: var(--accent);
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 3px 3px 6px #151515, -3px -3px 6px #353535;
+            user-select: none;
+        }
+        .control-btn:active { transform: scale(0.95); }
+        .control-btn.active {
+            background: var(--highlight);
+            color: #111;
+            box-shadow: 0 0 10px var(--highlight);
+            border-color: #fff;
+        }
+        /* Solving State */
+        .control-btn.solving-active {
+            border-color: var(--success);
+            box-shadow: 0 0 5px var(--success);
+        }
+
+        .spinner {
+            display: flex;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 4px;
+        }
+        .spinner button {
+            padding: 2px 6px;
+            font-size: 0.8rem;
+            background: transparent;
+        }
+        .spinner span {
+            padding: 2px 5px;
+            min-width: 20px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Day 10 Config</h2>
+
+    <div>
+        <label>Mode</label>
+        <div style="display:flex; gap:10px; margin-bottom:10px">
+            <label style="cursor:pointer; color:white;">
+                <input type="radio" name="mode" value="p1" checked onchange="setMode('p1')"> Part 1 (XOR)
+            </label>
+            <label style="cursor:pointer; color:white;">
+                <input type="radio" name="mode" value="p2" onchange="setMode('p2')"> Part 2 (Sums)
+            </label>
+        </div>
+    </div>
+
+    <div>
+        <label>Scenario Input</label>
+        <textarea id="inputData" spellcheck="false" onchange="loadScenarios()">
+[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
+[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
+[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}</textarea>
+    </div>
+
+    <div class="scenario-nav">
+        <button onclick="changeScenario(-1)">◀</button>
+        <span id="scenarioLabel">Scenario 1 / 3</span>
+        <button onclick="changeScenario(1)">▶</button>
+    </div>
+
+    <div class="stats-panel">
+        <div class="stat-row">
+            <span>Goal:</span> <span id="uiGoal">Pattern</span>
+        </div>
+        <div class="stat-row">
+            <span>Presses:</span> <span id="uiPresses" class="stat-val">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Status:</span> <span id="uiStatus" class="stat-val">-</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="btnStep" class="btn-primary" onclick="stepSolver()">Step</button>
+        <button id="btnRun" class="btn-primary" onclick="toggleRun()">Run Auto</button>
+        <button class="btn-danger" onclick="resetCurrent()">Reset</button>
+    </div>
+
+    <div>
+        <label>Speed</label>
+        <input type="range" id="speedRange" min="1" max="20" value="10" style="width:100%">
+    </div>
+</div>
+
+<div class="main-content">
+    <h2 id="vizTitle">Visualization</h2>
+    <div id="machine" class="machine-container"></div>
+</div>
+
+<script>
+    // --- State ---
+    let scenarios = [];
+    let currentScenarioIndex = 0;
+    let mode = 'p1';
+
+    // Current Scenario Data
+    let p1Target = [];
+    let p2Target = [];
+    let buttons = [];
+
+    // User/Solver State
+    let p1State = []; // Current bits
+    let p1Pressed = []; // Booleans
+    let p2Counts = []; // Integers
+
+    // Solver Internal State
+    let solverState = null;
+    let isRunning = false;
+    let runTimer = null;
+
+    // --- Parsing ---
+
+    function parseLine(line) {
+        line = line.trim();
+        if(!line) return null;
+
+        const p1Match = line.match(/\[([.#]+)\]/);
+        const p2Match = line.match(/\{([\d,]+)\}/);
+
+        const btnRegex = /\(([\d,]+)\)/g;
+        const btnMatches = [...line.matchAll(btnRegex)];
+
+        if (!p1Match || !p2Match) return null;
+
+        const p1 = p1Match[1].split('').map(c => c==='#'?1:0);
+        const p2 = p2Match[1].split(',').map(Number);
+        const btns = btnMatches.map(m => m[1].split(',').map(s => parseInt(s.trim())));
+
+        return { p1, p2, btns };
+    }
+
+    function loadScenarios() {
+        const text = document.getElementById('inputData').value;
+        const lines = text.split('\n');
+        scenarios = lines.map(parseLine).filter(x => x);
+
+        if (scenarios.length === 0) {
+            scenarios = [{ p1:[], p2:[], btns:[] }];
+        }
+
+        if (currentScenarioIndex >= scenarios.length) currentScenarioIndex = 0;
+        loadScenario(currentScenarioIndex);
+    }
+
+    function changeScenario(delta) {
+        let next = currentScenarioIndex + delta;
+        if (next >= 0 && next < scenarios.length) {
+            loadScenario(next);
+        }
+    }
+
+    function loadScenario(idx) {
+        stopSolver();
+        currentScenarioIndex = idx;
+        const data = scenarios[idx];
+
+        p1Target = data.p1;
+        p2Target = data.p2;
+        buttons = data.btns;
+
+        document.getElementById('scenarioLabel').textContent = `Scenario ${idx+1} / ${scenarios.length}`;
+
+        resetCurrent();
+    }
+
+    function setMode(m) {
+        mode = m;
+        stopSolver();
+        resetCurrent();
+    }
+
+    function resetCurrent() {
+        stopSolver();
+
+        // P1 Reset
+        p1State = new Array(p1Target.length).fill(0);
+        p1Pressed = new Array(buttons.length).fill(false);
+
+        // P2 Reset
+        p2Counts = new Array(buttons.length).fill(0);
+
+        render();
+        updateStats();
+    }
+
+    // --- Rendering ---
+
+    function render() {
+        const container = document.getElementById('machine');
+        container.innerHTML = '';
+
+        if (mode === 'p1') {
+            document.getElementById('vizTitle').textContent = "Part 1: XOR Switches";
+            renderP1(container);
+        } else {
+            document.getElementById('vizTitle').textContent = "Part 2: Accumulators";
+            renderP2(container);
+        }
+
+        updateStats();
+    }
+
+    function renderP1(container) {
+        // Lamps
+        const row = document.createElement('div');
+        row.className = 'lamp-row';
+
+        p1State.forEach((val, i) => {
+            const lamp = document.createElement('div');
+            lamp.className = `lamp ${val ? 'on' : ''}`;
+
+            // Target indicator ring
+            const ring = document.createElement('div');
+            ring.className = `lamp-target-ring ${p1Target[i] ? 'target-on' : ''}`;
+            lamp.appendChild(ring);
+
+            lamp.title = `Index ${i}\nCurrent: ${val}\nTarget: ${p1Target[i]}`;
+            row.appendChild(lamp);
+        });
+        container.appendChild(row);
+
+        // Buttons
+        const grid = document.createElement('div');
+        grid.className = 'button-grid';
+
+        buttons.forEach((indices, idx) => {
+            const unit = document.createElement('div');
+            unit.className = 'btn-unit';
+
+            const btn = document.createElement('div');
+            btn.className = `control-btn ${p1Pressed[idx] ? 'active' : ''}`;
+
+            // Solver Highlighting
+            if (solverState && solverState.currentBtn === idx) {
+                btn.classList.add('solving-active');
+            }
+
+            // Label
+            const txt = indices.join(',');
+            btn.textContent = txt.length > 5 ? txt.substring(0,4)+'..' : txt;
+            btn.title = `Toggles indices: ${txt}`;
+
+            btn.onmousedown = () => userToggleP1(idx);
+
+            unit.appendChild(btn);
+            grid.appendChild(unit);
+        });
+        container.appendChild(grid);
+    }
+
+    function renderP2(container) {
+        // Calculate current sums
+        const currentSums = new Array(p2Target.length).fill(0);
+        buttons.forEach((indices, btnIdx) => {
+            const c = p2Counts[btnIdx];
+            if (c > 0) {
+                indices.forEach(targetIdx => {
+                    if (targetIdx < currentSums.length) currentSums[targetIdx] += c;
+                });
+            }
+        });
+
+        const maxVal = Math.max(...p2Target, ...currentSums, 1) * 1.2;
+
+        // Chart
+        const chart = document.createElement('div');
+        chart.className = 'bar-chart';
+
+        p2Target.forEach((t, i) => {
+            const curr = currentSums[i];
+            const col = document.createElement('div');
+            col.className = 'bar-col';
+
+            const track = document.createElement('div');
+            track.className = 'bar-track';
+
+            // Target Line
+            const tPct = (t / maxVal) * 100;
+            const line = document.createElement('div');
+            line.className = 'bar-target';
+            line.style.bottom = `${tPct}%`;
+            line.title = `Target: ${t}`;
+            track.appendChild(line);
+
+            // Fill
+            const cPct = Math.min((curr / maxVal) * 100, 100);
+            const fill = document.createElement('div');
+            fill.className = 'bar-fill';
+            fill.style.height = `${cPct}%`;
+            if (curr > t) fill.style.backgroundColor = 'var(--danger)';
+            else if (curr === t) fill.style.backgroundColor = 'var(--success)';
+
+            track.appendChild(fill);
+
+            // Value Label inside track or above
+            const valLabel = document.createElement('div');
+            valLabel.className = 'bar-val';
+            valLabel.textContent = curr;
+            track.appendChild(valLabel);
+
+            col.appendChild(track);
+
+            const lbl = document.createElement('div');
+            lbl.className = 'bar-label';
+            lbl.textContent = i;
+            col.appendChild(lbl);
+
+            chart.appendChild(col);
+        });
+        container.appendChild(chart);
+
+        // Buttons
+        const grid = document.createElement('div');
+        grid.className = 'button-grid';
+
+        buttons.forEach((indices, idx) => {
+            const unit = document.createElement('div');
+            unit.className = 'btn-unit';
+
+            const btn = document.createElement('div');
+            btn.className = 'control-btn';
+            if (solverState && solverState.currentBtn === idx) {
+                btn.classList.add('solving-active');
+            }
+
+            const txt = indices.join(',');
+            btn.textContent = txt.length > 5 ? txt.substring(0,4)+'..' : txt;
+            btn.title = `Adds to: ${txt}`;
+
+            // Spinner
+            const spin = document.createElement('div');
+            spin.className = 'spinner';
+
+            const bMinus = document.createElement('button');
+            bMinus.textContent = '-';
+            bMinus.onclick = () => userChangeP2(idx, -1);
+
+            const valSpan = document.createElement('span');
+            valSpan.textContent = p2Counts[idx];
+
+            const bPlus = document.createElement('button');
+            bPlus.textContent = '+';
+            bPlus.onclick = () => userChangeP2(idx, 1);
+
+            spin.append(bMinus, valSpan, bPlus);
+
+            unit.appendChild(btn);
+            unit.appendChild(spin);
+            grid.appendChild(unit);
+        });
+        container.appendChild(grid);
+    }
+
+    // --- Interaction ---
+
+    function userToggleP1(idx) {
+        stopSolver();
+        p1Pressed[idx] = !p1Pressed[idx];
+        recalcP1();
+        render();
+    }
+
+    function recalcP1() {
+        p1State = new Array(p1Target.length).fill(0);
+        p1Pressed.forEach((pressed, bIdx) => {
+            if(pressed) {
+                buttons[bIdx].forEach(bit => {
+                    if(bit < p1State.length) p1State[bit] ^= 1;
+                });
+            }
+        });
+    }
+
+    function userChangeP2(idx, delta) {
+        stopSolver();
+        const n = p2Counts[idx] + delta;
+        if(n >= 0) {
+            p2Counts[idx] = n;
+            render();
+        }
+    }
+
+    function updateStats() {
+        const uiStatus = document.getElementById('uiStatus');
+        const uiPresses = document.getElementById('uiPresses');
+
+        if (mode === 'p1') {
+            document.getElementById('uiGoal').textContent = "Match Bits";
+            uiPresses.textContent = p1Pressed.filter(x=>x).length;
+
+            const match = p1State.every((v,i) => v === p1Target[i]);
+            if(match) {
+                uiStatus.textContent = "MATCHED!";
+                uiStatus.className = "stat-val val-success";
+            } else {
+                uiStatus.textContent = "Unmatched";
+                uiStatus.className = "stat-val";
+            }
+        } else {
+            document.getElementById('uiGoal').textContent = "Fill Buckets";
+            uiPresses.textContent = p2Counts.reduce((a,b)=>a+b, 0);
+
+            const sums = new Array(p2Target.length).fill(0);
+            buttons.forEach((indices, btnIdx) => {
+                const c = p2Counts[btnIdx];
+                if(c > 0) indices.forEach(ti => { if(ti<sums.length) sums[ti] += c; });
+            });
+
+            let allMatch = true;
+            let over = false;
+            for(let i=0; i<p2Target.length; i++) {
+                if(sums[i] !== p2Target[i]) allMatch = false;
+                if(sums[i] > p2Target[i]) over = true;
+            }
+
+            if(allMatch) {
+                uiStatus.textContent = "SOLVED!";
+                uiStatus.className = "stat-val val-success";
+            } else if (over) {
+                uiStatus.textContent = "Overflow";
+                uiStatus.className = "stat-val";
+                uiStatus.style.color = "var(--danger)";
+            } else {
+                uiStatus.textContent = "In Progress";
+                uiStatus.className = "stat-val";
+            }
+        }
+    }
+
+    // --- Solvers ---
+
+    function stopSolver() {
+        isRunning = false;
+        clearTimeout(runTimer);
+        solverState = null;
+        document.getElementById('btnRun').textContent = "Run Auto";
+        document.getElementById('btnRun').classList.remove('btn-danger');
+    }
+
+    function toggleRun() {
+        if(isRunning) {
+            stopSolver();
+        } else {
+            if(!solverState) initSolver();
+            isRunning = true;
+            document.getElementById('btnRun').textContent = "Stop";
+            document.getElementById('btnRun').classList.add('btn-danger');
+            loopSolver();
+        }
+    }
+
+    function stepSolver() {
+        if(!solverState) initSolver();
+        processSolverStep();
+        render(); // Force render to show update
+    }
+
+    function loopSolver() {
+        if(!isRunning) return;
+
+        const done = processSolverStep();
+        render();
+
+        if(done) {
+            stopSolver();
+        } else {
+            const speed = parseInt(document.getElementById('speedRange').value);
+            const delay = Math.max(10, 500 - (speed * 20));
+            runTimer = setTimeout(loopSolver, delay);
+        }
+    }
+
+    function initSolver() {
+        if(mode === 'p1') {
+            // Binary counter state
+            solverState = {
+                type: 'p1',
+                max: 1 << buttons.length,
+                current: 0,
+                bestPresses: Infinity,
+                bestConfig: -1,
+                currentBtn: -1 // for viz only
+            };
+        } else {
+            // Backtracking state
+            // We'll solve by trying counts for button 0, then 1, etc.
+            // Constraint: Sums cannot exceed target.
+            solverState = {
+                type: 'p2',
+                stack: [{ btnIdx: 0 }],
+                solution: null,
+                currentBtn: 0
+            };
+            // Clear counts for solving
+            p2Counts.fill(0);
+        }
+    }
+
+    function processSolverStep() {
+        if(!solverState) return true;
+
+        if (solverState.type === 'p1') {
+            return stepP1Solver();
+        } else {
+            return stepP2Solver();
+        }
+    }
+
+    function stepP1Solver() {
+        const s = solverState;
+        if(s.current >= s.max) {
+            // End of search
+            if(s.bestConfig !== -1) {
+                // Apply best
+                for(let b=0; b<buttons.length; b++) {
+                    p1Pressed[b] = ((s.bestConfig >> b) & 1) === 1;
+                }
+                recalcP1();
+                document.getElementById('uiStatus').textContent = "SOLVED (Best)";
+            } else {
+                document.getElementById('uiStatus').textContent = "No Solution";
+            }
+            return true; // Done
+        }
+
+        // Apply current
+        let presses = 0;
+        for(let b=0; b<buttons.length; b++) {
+            const on = ((s.current >> b) & 1) === 1;
+            p1Pressed[b] = on;
+            if(on) presses++;
+        }
+        recalcP1();
+
+        // Check match
+        const match = p1State.every((v,i) => v === p1Target[i]);
+        if(match) {
+            if(presses < s.bestPresses) {
+                s.bestPresses = presses;
+                s.bestConfig = s.current;
+            }
+        }
+
+        s.current++;
+        return false; // Continue
+    }
+
+    function stepP2Solver() {
+        const s = solverState;
+
+        // If stack empty, no solution found
+        if(s.stack.length === 0) {
+            document.getElementById('uiStatus').textContent = "No Solution";
+            return true;
+        }
+
+        const frame = s.stack[s.stack.length - 1];
+        const btnIdx = frame.btnIdx;
+        s.currentBtn = btnIdx;
+
+        // If we reached past last button, check if solved
+        if (btnIdx >= buttons.length) {
+            if(checkP2Solved()) {
+                // Found it!
+                return true;
+            }
+            // Backtrack
+            s.stack.pop();
+            return false;
+        }
+
+        // Try next count for this button
+        if (frame.count === undefined) frame.count = 0;
+        else frame.count++;
+
+        // Heuristic limit: assume count won't exceed max target value (simple bound)
+        // Better bound: For any target affected by this button,
+        // count * 1 <= target[tIdx] - currentSumOtherButtons
+        // Let's just use a safe upper bound check.
+
+        const maxLimit = Math.max(...p2Target) + 1; // Loose bound
+
+        if (frame.count > maxLimit) {
+            // Backtrack: reset this button and pop
+            p2Counts[btnIdx] = 0;
+            s.stack.pop();
+            return false;
+        }
+
+        // Set count
+        p2Counts[btnIdx] = frame.count;
+
+        // Check feasibility
+        if (checkP2Feasible()) {
+            // Push next button
+            s.stack.push({ btnIdx: btnIdx + 1 });
+        } else {
+            // If not feasible (already exceeded), don't push next, loop will increment count next step
+            // Essentially "Prune"
+        }
+
+        return false;
+    }
+
+    function checkP2Solved() {
+        const sums = new Array(p2Target.length).fill(0);
+        buttons.forEach((indices, btnIdx) => {
+            const c = p2Counts[btnIdx];
+            if(c > 0) indices.forEach(ti => { if(ti<sums.length) sums[ti] += c; });
+        });
+        return sums.every((v, i) => v === p2Target[i]);
+    }
+
+    function checkP2Feasible() {
+        const sums = new Array(p2Target.length).fill(0);
+        buttons.forEach((indices, btnIdx) => {
+            const c = p2Counts[btnIdx];
+            if(c > 0) indices.forEach(ti => { if(ti<sums.length) sums[ti] += c; });
+        });
+        // Valid if no sum exceeds target
+        return sums.every((v, i) => v <= p2Target[i]);
+    }
+
+    window.onload = loadScenarios;
+
+</script>
+
+</body>
+</html>
