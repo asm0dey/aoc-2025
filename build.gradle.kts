@@ -14,6 +14,8 @@ repositories {
 
 dependencies {
     testImplementation(kotlin("test"))
+    implementation("org.choco-solver:choco-solver:5.0.0-beta.1")
+    implementation("org.ejml:ejml-all:0.44.0")
 }
 
 tasks.test {
