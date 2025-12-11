@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 11 Visualization: Path Counting</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --panel-bg: #252526;
+            --accent: #61afef; /* Blue */
+            --highlight: #e5c07b; /* Gold */
+            --node-def: #5c6370;
+            --node-start: #98c379; /* Green */
+            --node-end: #e06c75; /* Red */
+            --edge-color: #444;
+            --visited: #c678dd; /* Purple */
+        }
+
+        body {
+            font-family: 'Segoe UI', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        label { font-size: 0.9rem; color: #aaa; display: block; margin-bottom: 5px; }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            background-color: #111;
+            border: 1px solid #444;
+            color: #ddd;
+            font-family: monospace;
+            resize: vertical;
+            padding: 5px;
+            box-sizing: border-box;
+            white-space: pre;
+            overflow: auto;
+        }
+
+        input[type="text"], input[type="number"] {
+            background: #111;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .stats-panel {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        .stat-val { font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .val-res { color: var(--highlight); }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            background-color: #444;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #555; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background-color: var(--accent); color: #111; }
+        .btn-primary:hover { background-color: #4d8bbd; }
+        .btn-danger { background-color: var(--node-end); color: #fff; }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            position: relative;
+            background-color: #111;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .overlay-legend {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        #tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            padding: 5px 10px;
+            border-radius: 4px;
+            pointer-events: none;
+            display: none;
+            font-size: 0.8rem;
+            z-index: 100;
+            white-space: pre-line;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Day 11: Graph Paths</h2>
+
+    <div>
+        <label>Mode</label>
+        <div style="display:flex; gap:10px; margin-bottom:10px">
+            <label style="cursor:pointer; color:white;">
+                <input type="radio" name="mode" value="p1" checked onchange="setMode('p1')"> Part 1 (All Paths)
+            </label>
+            <label style="cursor:pointer; color:white;">
+                <input type="radio" name="mode" value="p2" onchange="setMode('p2')"> Part 2 (DP Flow)
+            </label>
+        </div>
+    </div>
+
+    <div>
+        <label for="inputData">Input (Node: Targets...)</label>
+        <textarea id="inputData" placeholder="you: a b&#10;a: out&#10;b: out">
+aaa: you hhh
+you: bbb ccc
+bbb: ddd eee
+ccc: ddd eee fff
+ddd: ggg
+eee: out
+fff: out
+ggg: out
+hhh: ccc fff iii
+iii: out</textarea>
+        <button onclick="parseAndLoad()" style="width:100%; margin-top:5px;">Load Graph</button>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+        <div style="flex:1">
+            <label>Start Node</label>
+            <input type="text" id="startNodeVal" value="you">
+        </div>
+        <div style="flex:1">
+            <label>End Node</label>
+            <input type="text" id="endNodeVal" value="out">
+        </div>
+    </div>
+
+    <div class="stats-panel">
+        <div class="stat-row">
+            <span>Nodes / Edges:</span> <span id="uiGraphStats" class="stat-val">0 / 0</span>
+        </div>
+        <div class="stat-row">
+            <span>Paths Found:</span> <span id="uiPathCount" class="stat-val val-res">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Status:</span> <span id="uiStatus" class="stat-val">-</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="btnRun" class="btn-primary" onclick="toggleRun()">Run</button>
+        <button class="btn-danger" onclick="reset()">Reset</button>
+    </div>
+
+    <div>
+        <label>Simulation Speed</label>
+        <input type="range" id="speedRange" min="1" max="50" value="10">
+    </div>
+
+    <div>
+        <button onclick="togglePhysics()" style="width:100%; margin-top:10px; background:#333;">Toggle Physics</button>
+    </div>
+</div>
+
+<div class="main-content" id="canvasContainer">
+    <canvas id="mainCanvas"></canvas>
+    <div id="tooltip"></div>
+
+    <div class="overlay-legend">
+        <div class="legend-item"><div class="dot" style="background:var(--node-start)"></div> Start</div>
+        <div class="legend-item"><div class="dot" style="background:var(--node-end)"></div> End</div>
+        <div class="legend-item"><div class="dot" style="background:var(--node-def)"></div> Node</div>
+        <div class="legend-item"><div class="dot" style="background:var(--highlight)"></div> Active</div>
+    </div>
+</div>
+
+<script>
+    // --- Configuration ---
+    let mode = 'p1';
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvasContainer');
+
+    // --- Graph State ---
+    let nodes = new Map(); // id -> {id, x, y, vx, vy, isStart, isEnd, dpValue, level}
+    let edges = []; // {source: Node, target: Node, id}
+
+    // --- Sim State ---
+    let isRunning = false;
+    let physicsEnabled = true;
+    let autoZoom = true;
+    let animationFrame = null;
+    let particles = []; // For Part 1
+    let topologicalOrder = []; // For Part 2
+    let processIndex = 0; // For Part 2
+    let pathCount = 0n;
+
+    // Part 2 Logic State
+    let p2Stages = []; // [{start, end, mapOfCounts}]
+    let currentStageIndex = 0;
+
+    // --- Physics Params ---
+    // Dynamic params now
+    let physParams = {
+        repulsion: 400,
+        springLen: 80,
+        springK: 0.05,
+        centerGravity: 0.005, // Lowered gravity to prevent clumping
+        damping: 0.6, // Increased friction (was 0.8) to reduce jiggle
+        alpha: 1.0 // Cooling factor
+    };
+
+    // --- Interaction ---
+    let view = { x: 0, y: 0, scale: 1 };
+    let isDragging = false;
+    let lastMouse = { x: 0, y: 0 };
+    let draggedNode = null;
+    let hoverNode = null;
+
+    // --- Init ---
+    // --- Init ---
+    window.onload = () => {
+        resize();
+        // Delay load slightly to ensure container size is correct
+        setTimeout(() => {
+            parseAndLoad();
+            loop();
+        }, 10);
+    };
+
+    window.onresize = resize;
+
+    function resize() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        // Center is calculated dynamically now
+    }
+
+    function setMode(m) {
+        mode = m;
+        // Default node names based on puzzle
+        if(mode === 'p1') {
+            document.getElementById('startNodeVal').value = "you";
+            document.getElementById('endNodeVal').value = "out";
+        } else {
+            document.getElementById('startNodeVal').value = "svr";
+            document.getElementById('endNodeVal').value = "out";
+        }
+        parseAndLoad();
+    }
+
+    // --- Parsing ---
+
+    function parseAndLoad() {
+        reset();
+        nodes.clear();
+        edges = [];
+        autoZoom = true;
+
+        const txt = document.getElementById('inputData').value;
+        const lines = txt.split('\n');
+
+        const startName = document.getElementById('startNodeVal').value.trim();
+        const endName = document.getElementById('endNodeVal').value.trim();
+
+        // 1. Build Nodes & Edges
+        lines.forEach(line => {
+            if(!line.trim()) return;
+            // Split by space and colon
+            const parts = line.split(/[:\s]+/).filter(s => s.trim().length > 0);
+            if(parts.length < 1) return;
+
+            const srcId = parts[0];
+            let neighbors = parts.slice(1);
+
+            if(!nodes.has(srcId)) createNode(srcId);
+
+            neighbors.forEach(targetId => {
+                if(!nodes.has(targetId)) createNode(targetId);
+                edges.push({
+                    source: srcId,
+                    target: targetId,
+                    id: `${srcId}-${targetId}`
+                });
+            });
+        });
+
+        // Resolve references
+        edges.forEach(e => {
+            e.source = nodes.get(e.source);
+            e.target = nodes.get(e.target);
+        });
+
+        // Mark Start/End
+        if(nodes.has(startName)) nodes.get(startName).isStart = true;
+        if(nodes.has(endName)) nodes.get(endName).isEnd = true;
+
+        document.getElementById('uiGraphStats').textContent = `${nodes.size} / ${edges.length}`;
+
+        // Dynamic Physics Tuning based on Node Count
+        const nodeCount = nodes.size;
+        if (nodeCount > 0) {
+            // ... physics tuning ...
+            const area = Math.min(canvas.width, canvas.height) ** 2;
+            const k = Math.sqrt(area / nodeCount) * 0.8;
+
+            physParams.repulsion = k * k * 2.0;
+            physParams.springLen = k * 1.5;
+            physParams.springK = 0.08;
+            physParams.damping = nodeCount > 100 ? 0.5 : 0.7;
+        }
+
+        // Reset Cooling
+        physParams.alpha = 1.0;
+
+        // Layout: DAG Layered
+        computeTopological(); // Must compute order first
+        layoutDAG();
+
+        // Disable physics by default to preserve the horizontal DAG layout
+        physicsEnabled = false;
+
+        // Initial Layout Scatter (Fallback if layoutDAG fails or empty)
+        if (nodes.size > 0 && Array.from(nodes.values())[0].x === 0) {
+            const spread = Math.min(canvas.width, canvas.height) / 3;
+            nodes.forEach(n => {
+                n.x = (Math.random() - 0.5) * spread;
+                n.y = (Math.random() - 0.5) * spread;
+            });
+        }
+    }
+
+    function createNode(id) {
+        nodes.set(id, {
+            id: id,
+            x: 0, y: 0,
+            vx: 0, vy: 0,
+            isStart: false,
+            isEnd: false,
+            dpValue: 0n, // BigInt for counts
+            active: false
+        });
+    }
+
+    // --- Algorithms ---
+
+    function computeTopological() {
+        // Kahn's Algorithm
+        let inDegree = new Map();
+        nodes.forEach(n => inDegree.set(n.id, 0));
+        edges.forEach(e => {
+            inDegree.set(e.target.id, inDegree.get(e.target.id) + 1);
+        });
+
+        let queue = [];
+        nodes.forEach(n => {
+            if(inDegree.get(n.id) === 0) queue.push(n);
+        });
+
+        topologicalOrder = [];
+        while(queue.length > 0) {
+            let u = queue.shift();
+            topologicalOrder.push(u);
+
+            // Find neighbors
+            let outgoing = edges.filter(e => e.source === u);
+            outgoing.forEach(e => {
+                let v = e.target;
+                inDegree.set(v.id, inDegree.get(v.id) - 1);
+                if(inDegree.get(v.id) === 0) queue.push(v);
+            });
+        }
+    }
+
+    function layoutDAG() {
+        if (nodes.size === 0) return;
+
+        // Initialize ranks
+        let nodeRanks = new Map();
+        nodes.forEach(n => nodeRanks.set(n.id, 0));
+
+        // Compute ranks (Longest Path Layering)
+        // topologicalOrder ensures we visit parents before children
+        topologicalOrder.forEach(u => {
+            let rU = nodeRanks.get(u.id);
+            edges.filter(e => e.source === u).forEach(e => {
+                let v = e.target;
+                let rV = nodeRanks.get(v.id);
+                if (rU + 1 > rV) {
+                    nodeRanks.set(v.id, rU + 1);
+                }
+            });
+        });
+
+        // Group by rank
+        let byRank = new Map();
+        let maxRank = 0;
+        nodeRanks.forEach((r, id) => {
+            if(r > maxRank) maxRank = r;
+            if(!byRank.has(r)) byRank.set(r, []);
+            byRank.get(r).push(nodes.get(id));
+        });
+
+        const X_SPACING = 150;
+        const Y_SPACING = 80;
+
+        // Assign positions
+        byRank.forEach((rankNodes, r) => {
+            let totalH = rankNodes.length * Y_SPACING;
+            let startY = -totalH / 2;
+
+            rankNodes.forEach((n, idx) => {
+                n.x = r * X_SPACING;
+                n.y = startY + idx * Y_SPACING;
+                n.vx = 0; n.vy = 0;
+            });
+        });
+    }
+
+    function updateAutoZoom() {
+        if (!autoZoom || nodes.size === 0) return;
+
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        nodes.forEach(n => {
+            if (n.x < minX) minX = n.x;
+            if (n.x > maxX) maxX = n.x;
+            if (n.y < minY) minY = n.y;
+            if (n.y > maxY) maxY = n.y;
+        });
+
+        // Add padding
+        const padding = 100;
+        const w = maxX - minX + padding * 2;
+        const h = maxY - minY + padding * 2;
+
+        if (w <= 0 || h <= 0) return;
+
+        const scaleX = canvas.width / w;
+        const scaleY = canvas.height / h;
+
+        // Target scale
+        let newScale = Math.min(scaleX, scaleY);
+        // Clamp scale to reasonable limits
+        newScale = Math.max(0.05, Math.min(2.0, newScale));
+
+        // Smooth transition
+        view.scale += (newScale - view.scale) * 0.05;
+
+        // Center view
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+
+        const targetX = canvas.width / 2 - cx * view.scale;
+        const targetY = canvas.height / 2 - cy * view.scale;
+
+        view.x += (targetX - view.x) * 0.1;
+        view.y += (targetY - view.y) * 0.1;
+    }
+
+    // --- Simulation Loop ---
+
+    function reset() {
+        isRunning = false;
+        particles = [];
+
+        pathCount = 0n;
+        processIndex = 0;
+
+        nodes.forEach(n => {
+            n.dpValue = 0n;
+            n.active = false;
+        });
+
+        document.getElementById('uiPathCount').textContent = "0";
+        document.getElementById('uiStatus').textContent = "Ready";
+        document.getElementById('btnRun').textContent = "Run";
+        document.getElementById('btnRun').classList.remove('btn-danger');
+    }
+
+    function toggleRun() {
+        if(isRunning) {
+            isRunning = false;
+            document.getElementById('btnRun').textContent = "Run";
+            document.getElementById('btnRun').classList.remove('btn-danger');
+            document.getElementById('uiStatus').textContent = "Paused";
+        } else {
+            isRunning = true;
+            document.getElementById('btnRun').textContent = "Pause";
+            document.getElementById('btnRun').classList.add('btn-danger');
+
+            // If just starting
+            if(mode === 'p1' && particles.length === 0) {
+                spawnParticles();
+            }
+            if(mode === 'p2' && processIndex === 0 && currentStageIndex === 0) {
+                setupP2Stages();
+            }
+        }
+    }
+
+    function setupP2Stages() {
+        // Logic mimicking Kotlin part2
+        // 1. Check connectivity dac -> fft
+        const dac = nodes.get("dac");
+        const fft = nodes.get("fft");
+
+        let first = "fft", second = "dac";
+
+        // Simple BFS check for reachability
+        if (dac && fft && isReachable("dac", "fft")) {
+            first = "dac";
+            second = "fft";
+        }
+
+        const startNode = document.getElementById('startNodeVal').value.trim();
+        const endNode = document.getElementById('endNodeVal').value.trim();
+
+        // Define stages: Start -> First, First -> Second, Second -> End
+        p2Stages = [
+            { start: startNode, end: first, complete: false, result: 0n },
+            { start: first, end: second, complete: false, result: 0n },
+            { start: second, end: endNode, complete: false, result: 0n }
+        ];
+
+        currentStageIndex = 0;
+        processIndex = 0;
+        pathCount = 0n;
+
+        prepareStage(0);
+    }
+
+    function isReachable(startId, endId) {
+        let visited = new Set();
+        let queue = [startId];
+        while(queue.length > 0) {
+            let u = queue.shift();
+            if(u === endId) return true;
+            visited.add(u);
+            edges.filter(e => e.source.id === u).forEach(e => {
+                if(!visited.has(e.target.id)) queue.push(e.target.id);
+            });
+        }
+        return false;
+    }
+
+    function prepareStage(idx) {
+        if(idx >= p2Stages.length) return;
+
+        const stage = p2Stages[idx];
+        document.getElementById('uiStatus').textContent = `Stage ${idx+1}/3: ${stage.start} -> ${stage.end}`;
+
+        // Reset DP values
+        nodes.forEach(n => {
+            n.dpValue = 0n;
+            n.active = false;
+        });
+
+        const sNode = nodes.get(stage.start);
+        if(sNode) sNode.dpValue = 1n;
+
+        // Reset topological processing index
+        processIndex = 0;
+    }
+
+    function spawnParticles() {
+        const startNode = Array.from(nodes.values()).find(n => n.isStart);
+        if(!startNode) {
+            alert(`Start node "${document.getElementById('startNodeVal').value}" not found in graph!`);
+            toggleRun();
+            return;
+        }
+
+        // Create initial particle
+        particles.push({
+            current: startNode,
+            target: null, // moving towards
+            progress: 0, // 0 to 1 along edge
+            history: [startNode.id] // simple path check
+        });
+        document.getElementById('uiStatus').textContent = "Searching...";
+    }
+
+    function togglePhysics() {
+        physicsEnabled = !physicsEnabled;
+        if(physicsEnabled) physParams.alpha = 1.0; // Wake up
+    }
+
+    function loop() {
+        updatePhysics();
+        updateAutoZoom();
+        updateLogic();
+        draw();
+        animationFrame = requestAnimationFrame(loop);
+    }
+
+    function updatePhysics() {
+        if(!physicsEnabled) return;
+
+        // Cooling check
+        if(physParams.alpha < 0.005) {
+            // Auto-freeze to save CPU and stop micro-jitter
+            return;
+        }
+
+        // Apply Cooling
+        physParams.alpha *= 0.99; // Decay temperature
+
+        // Repulsion
+        const ns = Array.from(nodes.values());
+
+        for(let i=0; i<ns.length; i++) {
+            for(let j=i+1; j<ns.length; j++) {
+                const a = ns[i];
+                const b = ns[j];
+                const dx = a.x - b.x;
+                const dy = a.y - b.y;
+                let distSq = dx*dx + dy*dy;
+
+                // Avoid singularity
+                if(distSq < 0.1) distSq = 0.1;
+
+                // Simple spatial cutoff for performance on large graphs
+                if(distSq > 500000) continue;
+
+                const dist = Math.sqrt(distSq);
+
+                // F = Repulsion / dist
+                // Limit max force to prevent explosion
+                const force = Math.min(physParams.repulsion / dist, 50) * physParams.alpha;
+
+                const fx = (dx/dist) * force;
+                const fy = (dy/dist) * force;
+
+                a.vx += fx; a.vy += fy;
+                b.vx -= fx; b.vy -= fy;
+            }
+
+            // Center Gravity (weak pull to 0,0)
+            const a = ns[i];
+            const grav = physParams.centerGravity * physParams.alpha;
+            a.vx -= a.x * grav;
+            a.vy -= a.y * grav;
+        }
+
+        // Springs
+        edges.forEach(e => {
+            const dx = e.target.x - e.source.x;
+            const dy = e.target.y - e.source.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+
+            if(dist > 0) {
+                // Hooke's Law: F = -k * (x - L)
+                const displacement = dist - physParams.springLen;
+                const force = displacement * physParams.springK * physParams.alpha;
+
+                const fx = (dx/dist) * force;
+                const fy = (dy/dist) * force;
+
+                e.source.vx += fx; e.source.vy += fy;
+                e.target.vx -= fx; e.target.vy -= fy;
+            }
+        });
+
+        // Apply Velocity & Damping
+        ns.forEach(n => {
+            if(n === draggedNode) return;
+
+            // Limit max velocity (Temperature)
+            // This prevents the "explosion" or wild oscillation
+            const vSq = n.vx*n.vx + n.vy*n.vy;
+            const limit = 20 * physParams.alpha; // Max speed scales with temperature
+
+            if(vSq > limit*limit) {
+                const v = Math.sqrt(vSq);
+                n.vx = (n.vx / v) * limit;
+                n.vy = (n.vy / v) * limit;
+            }
+
+            n.vx *= physParams.damping;
+            n.vy *= physParams.damping;
+            n.x += n.vx;
+            n.y += n.vy;
+        });
+    }
+
+    function updateLogic() {
+        if(!isRunning) return;
+
+        const speed = parseInt(document.getElementById('speedRange').value);
+
+        if (mode === 'p1') {
+            updateP1(speed);
+        } else {
+            updateP2(speed);
+        }
+    }
+
+    function updateP1(speed) {
+        // Particles move along edges
+        // Speed determines how fast progress increases
+        const step = speed * 0.005;
+
+        // Process backwards so we can splice
+        for(let i=particles.length-1; i>=0; i--) {
+            let p = particles[i];
+
+            if(p.target === null) {
+                // At a node, need to choose edges
+                const curr = p.current;
+
+                if(curr.isEnd) {
+                    pathCount++;
+                    document.getElementById('uiPathCount').textContent = pathCount.toString();
+                    // Particle reached end, visual flare then remove
+                    // (Just remove for performance if many)
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                // Find outgoing
+                const outgoing = edges.filter(e => e.source === curr);
+
+                // Filter loops (simple paths)
+                const validEdges = outgoing.filter(e => !p.history.includes(e.target.id));
+
+                if(validEdges.length === 0) {
+                    // Dead end
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                // Branching
+                // Reuse current particle for first edge, spawn new for others
+                // Limit particle count to prevent crash
+                if(particles.length > 5000) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                p.target = validEdges[0].target; // reuse
+                p.progress = 0;
+                p.history = [...p.history, p.target.id];
+
+                for(let k=1; k<validEdges.length; k++) {
+                    particles.push({
+                        current: curr,
+                        target: validEdges[k].target,
+                        progress: 0,
+                        history: [...p.history, validEdges[k].target.id]
+                    });
+                }
+            } else {
+                // Moving
+                p.progress += step;
+                if(p.progress >= 1) {
+                    p.current = p.target;
+                    p.target = null;
+                }
+            }
+        }
+
+        if(particles.length === 0) {
+            document.getElementById('uiStatus').textContent = "Finished";
+            isRunning = false;
+            document.getElementById('btnRun').textContent = "Run";
+            document.getElementById('btnRun').classList.remove('btn-danger');
+        } else {
+            document.getElementById('uiStatus').textContent = `Simulating (${particles.length} agents)`;
+        }
+    }
+
+    function updateP2(speed) {
+        // Topological propagation
+        // Only process 1 node every X frames based on speed
+        // Or process continuously
+
+        // Slow down the visual updates
+        if(Math.random() > (speed / 50)) return;
+
+        if(currentStageIndex >= p2Stages.length) {
+            // Calculate Final Result
+            const total = p2Stages.reduce((acc, s) => acc * s.result, 1n);
+            document.getElementById('uiPathCount').textContent = total.toString();
+            document.getElementById('uiStatus').textContent = "Finished";
+            isRunning = false;
+            return;
+        }
+
+        if(processIndex >= topologicalOrder.length) {
+            // End of current stage scan
+            // Capture result from end node of this stage
+            const stage = p2Stages[currentStageIndex];
+            const endNode = nodes.get(stage.end);
+            stage.result = endNode ? endNode.dpValue : 0n;
+            stage.complete = true;
+
+            // Move to next
+            currentStageIndex++;
+            if(currentStageIndex < p2Stages.length) {
+                prepareStage(currentStageIndex);
+            }
+            return;
+        }
+
+        const u = topologicalOrder[processIndex];
+        u.active = true;
+
+        const val = u.dpValue;
+
+        if (val > 0n) {
+            const outgoing = edges.filter(e => e.source === u);
+            outgoing.forEach(e => {
+                e.target.dpValue += val;
+            });
+        }
+
+        // Real-time update for current stage target
+        const stage = p2Stages[currentStageIndex];
+        if(u.id === stage.end) {
+            document.getElementById('uiPathCount').textContent = `(Stage ${currentStageIndex+1}) ${u.dpValue}`;
+        }
+
+        processIndex++;
+    }
+
+    // --- Drawing ---
+
+    function toScreen(x, y) {
+        return {
+            x: x * view.scale + view.x,
+            y: y * view.scale + view.y
+        };
+    }
+
+    function fromScreen(sx, sy) {
+        return {
+            x: (sx - view.x) / view.scale,
+            y: (sy - view.y) / view.scale
+        };
+    }
+
+    function draw() {
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = view.scale;
+
+        // Draw Edges
+        edges.forEach(e => {
+            const s = toScreen(e.source.x, e.source.y);
+            const t = toScreen(e.target.x, e.target.y);
+
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            ctx.lineTo(t.x, t.y);
+            ctx.stroke();
+
+            // Arrow head
+            drawArrow(s, t);
+        });
+
+        // Draw Particles (P1)
+        if(mode === 'p1') {
+            ctx.fillStyle = '#e5c07b';
+            particles.forEach(p => {
+                const s = toScreen(p.current.x, p.current.y);
+                let pos = s;
+                if(p.target) {
+                    const t = toScreen(p.target.x, p.target.y);
+                    pos = {
+                        x: s.x + (t.x - s.x) * p.progress,
+                        y: s.y + (t.y - s.y) * p.progress
+                    };
+                }
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 3 * view.scale, 0, Math.PI*2);
+                ctx.fill();
+            });
+        }
+
+        // Draw Nodes
+        nodes.forEach(n => {
+            const p = toScreen(n.x, n.y);
+            const r = 8 * view.scale;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+
+            if(n.isStart) ctx.fillStyle = '#98c379';
+            else if(n.isEnd) ctx.fillStyle = '#e06c75';
+            else if(n.active) ctx.fillStyle = '#e5c07b'; // Active in P2
+            else ctx.fillStyle = '#5c6370';
+
+            // Highlight Stage Nodes
+            if(mode === 'p2' && p2Stages.length > 0) {
+                const stage = p2Stages[currentStageIndex] || p2Stages[p2Stages.length-1];
+                if(n.id === stage.start) ctx.fillStyle = '#98c379'; // Green
+                if(n.id === stage.end) ctx.fillStyle = '#e06c75'; // Red
+
+                // Highlight intermediates "dac" "fft"
+                if(n.id === 'dac' || n.id === 'fft') {
+                    ctx.strokeStyle = '#61afef'; // Blue Outline
+                    ctx.lineWidth = 3 * view.scale;
+                } else {
+                    ctx.strokeStyle = '#222';
+                    ctx.lineWidth = view.scale;
+                }
+            } else {
+                ctx.strokeStyle = '#222';
+                ctx.lineWidth = view.scale;
+            }
+
+            ctx.fill();
+            ctx.stroke();
+
+            // Reset Line Width
+            ctx.lineWidth = view.scale;
+
+            // Label
+            if(view.scale > 0.5) {
+                ctx.fillStyle = '#ccc';
+                ctx.font = `${10*view.scale}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText(n.id, p.x, p.y - r - 2);
+
+                // P2 Value
+                if(mode === 'p2' && n.dpValue > 0n) {
+                    ctx.fillStyle = '#e5c07b';
+                    let valStr = n.dpValue.toString();
+                    if(valStr.length > 5) valStr = valStr.substring(0,4) + "..";
+                    ctx.fillText(valStr, p.x, p.y + r + 10*view.scale);
+                }
+            }
+        });
+    }
+
+    function drawArrow(s, t) {
+        const angle = Math.atan2(t.y - s.y, t.x - s.x);
+        const headLen = 8 * view.scale;
+        // Back off from target center
+        const offset = 10 * view.scale;
+        const tx = t.x - offset * Math.cos(angle);
+        const ty = t.y - offset * Math.sin(angle);
+
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - headLen * Math.cos(angle - Math.PI / 6), ty - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(tx - headLen * Math.cos(angle + Math.PI / 6), ty - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.fill();
+    }
+
+    // --- Events ---
+
+    canvas.addEventListener('mousedown', e => {
+        autoZoom = false; // Disable auto zoom on user interaction
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        // Hit test
+        let clicked = null;
+        for(let n of nodes.values()) {
+            const p = toScreen(n.x, n.y);
+            const dx = mx - p.x;
+            const dy = my - p.y;
+            if(dx*dx + dy*dy < 200 * view.scale) { // generous hit
+                clicked = n;
+                break;
+            }
+        }
+
+        if(clicked) {
+            draggedNode = clicked;
+            // Wake up physics on interaction
+            physParams.alpha = 1.0;
+            physicsEnabled = true;
+        } else {
+            isDragging = true;
+        }
+        lastMouse = {x: mx, y: my};
+    });
+
+    window.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const dx = mx - lastMouse.x;
+        const dy = my - lastMouse.y;
+        lastMouse = {x: mx, y: my};
+
+        if(draggedNode) {
+            draggedNode.x += dx / view.scale;
+            draggedNode.y += dy / view.scale;
+            draggedNode.vx = 0; draggedNode.vy = 0;
+        } else if(isDragging) {
+            view.x += dx;
+            view.y += dy;
+        } else {
+            // Hover check
+            const mPos = fromScreen(mx, my);
+            hoverNode = null;
+            let tooltip = document.getElementById('tooltip');
+            let found = false;
+
+            for(let n of nodes.values()) {
+                if((mPos.x-n.x)**2 + (mPos.y-n.y)**2 < 100) { // approx radius sq in world
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (e.clientX + 10) + 'px';
+                    tooltip.style.top = (e.clientY + 10) + 'px';
+                    let txt = `ID: ${n.id}`;
+                    if(mode === 'p2') txt += `\nPaths: ${n.dpValue}`;
+                    tooltip.textContent = txt;
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) tooltip.style.display = 'none';
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+        draggedNode = null;
+    });
+
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        autoZoom = false; // Disable auto zoom on user interaction
+
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        // 1. Calculate world position under mouse BEFORE zoom
+        const worldX = (mx - view.x) / view.scale;
+        const worldY = (my - view.y) / view.scale;
+
+        // 2. Apply Zoom
+        const factor = 1 - Math.sign(e.deltaY) * 0.1;
+        view.scale = Math.max(0.05, Math.min(5.0, view.scale * factor));
+
+        // 3. Calculate new view.x/y so that worldX/worldY is still at mx/my
+        // mx = worldX * newScale + newViewX
+        // => newViewX = mx - worldX * newScale
+        view.x = mx - worldX * view.scale;
+        view.y = my - worldY * view.scale;
+    });
+
+</script>
+</body>
+</html>
