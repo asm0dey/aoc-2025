@@ -65,10 +65,8 @@ fun main() {
         // (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
         return parsedInput.sumOf { (buttons, targetCounterState) ->
             val model = ExpressionsBasedModel()
-            val maxValue = targetCounterState.max().toDouble()
-            val ks = Array(buttons.size) {
-                model.newVariable("button_$it").integer().lower(0).upper(maxValue)
-            }
+            val maxValue = targetCounterState.max()
+            val ks = Array(buttons.size) { model.newVariable("button_$it").integer().lower(0).upper(maxValue) }
 
             for (counterIndex in targetCounterState.indices) {
                 buttons
@@ -78,7 +76,7 @@ fun main() {
                     .toTypedArray()
                     .let {
                         val addExpression =
-                            model.addExpression("sum_$counterIndex").level(targetCounterState[counterIndex])
+                            model.addExpression().level(targetCounterState[counterIndex])
                         for (variable in it) addExpression[variable] = 1.0
                     }
             }
@@ -87,8 +85,7 @@ fun main() {
                 .lower(maxValue)
                 .upper(maxValue * buttons.size)
             ks.forEach { total[it] = 1.0 }
-            val minimise = model.minimise()
-            (0..<minimise.size()).map { minimise[it.toLong()] }.sumOf { it.toInt() }
+            model.minimise().value.toInt()
         }
     }
 
