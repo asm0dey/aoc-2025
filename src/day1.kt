@@ -35,7 +35,8 @@ fun main() {
 
     val testInput1 = readFile("day1_t1")
     println(part1(testInput1))
-    println(part1(readFile("day1")))
     println(part2(testInput1))
-    println(part2(readFile("day1")))
+    val input = readFile("day1")
+    println(part1(input))
+    println(part2(input))
 }
