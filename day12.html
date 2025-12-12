@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Day 12 Visualization: Packing with Polyominoes</title>
+    <style>
+        :root{
+            --bg-color:#1e1e1e;
+            --text-color:#e0e0e0;
+            --panel-bg:#252526;
+            --accent:#61afef;      /* blue */
+            --highlight:#e5c07b;   /* gold */
+            --success:#98c379;     /* green */
+            --danger:#e06c75;      /* red */
+            --muted:#5c6370;
+            --grid:#333;
+            --cell-empty:#141414;
+            --cell-unused:#0e0e0e;
+            --cell-blocked:#1b1b1b;
+        }
+
+        body{
+            font-family: "Segoe UI", monospace;
+            background: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar{
+            width: 360px;
+            background: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 5px rgba(0,0,0,.2);
+            z-index: 10;
+            overflow: auto;
+        }
+
+        h2{ margin: 0; font-size: 1.2rem; color: var(--accent); }
+        label{ font-size: .9rem; color:#aaa; display:block; margin-bottom:6px; }
+
+        textarea{
+            width:100%;
+            height:160px;
+            background:#111;
+            border:1px solid #444;
+            color:#ddd;
+            font-family: monospace;
+            resize: vertical;
+            padding:6px;
+            box-sizing:border-box;
+            white-space: pre;
+            overflow:auto;
+            font-size: .8rem;
+        }
+
+        select, input[type="number"]{
+            width:100%;
+            background:#111;
+            border:1px solid #444;
+            color:#fff;
+            padding:6px;
+            box-sizing:border-box;
+            font-family: monospace;
+        }
+
+        .stats-panel{
+            background: rgba(0,0,0,.2);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        .stat-row{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom: 8px;
+            font-size: .9rem;
+        }
+        .stat-val{ font-weight: 700; font-family: monospace; }
+        .val-hl{ color: var(--highlight); }
+        .val-ok{ color: var(--success); }
+        .val-bad{ color: var(--danger); }
+
+        .controls{
+            display:grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button{
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 700;
+            color: white;
+            background: #444;
+            transition: background .2s;
+        }
+        button:hover{ background:#555; }
+        button:disabled{ opacity:.5; cursor:not-allowed; }
+        .btn-primary{ background: var(--accent); color:#111; }
+        .btn-primary:hover{ background:#4d8bbd; }
+        .btn-danger{ background: var(--danger); }
+
+        .row{
+            display:flex;
+            gap:10px;
+            align-items:center;
+        }
+        .row > div{ flex:1; }
+
+        input[type="range"]{ width:100%; }
+
+        .mini{
+            font-size: .8rem;
+            color:#bbb;
+            line-height: 1.4;
+        }
+
+        .shape-strip{
+            display:flex;
+            gap:8px;
+            flex-wrap: wrap;
+            padding: 8px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: rgba(0,0,0,.15);
+        }
+        .shape-card{
+            width: 74px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: rgba(0,0,0,.25);
+            padding: 6px;
+        }
+        .shape-title{
+            display:flex;
+            justify-content:space-between;
+            font-size: 11px;
+            color:#ccc;
+            margin-bottom: 4px;
+        }
+        .shape-svg{
+            width: 100%;
+            height: 56px;
+            display:block;
+            background: #0f0f0f;
+            border: 1px solid #2a2a2a;
+            border-radius: 6px;
+        }
+
+        .main-content{
+            flex: 1;
+            position: relative;
+            background: #111;
+            overflow: hidden;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+        }
+
+        canvas{ display:block; }
+
+        .overlay-legend{
+            position:absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0,0,0,.7);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: .8rem;
+            pointer-events:none;
+            border: 1px solid #333;
+        }
+        .legend-item{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            margin-bottom:4px;
+        }
+        .swatch{
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,.15);
+        }
+
+        #tooltip{
+            position:absolute;
+            background: rgba(0,0,0,.85);
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #333;
+            pointer-events:none;
+            display:none;
+            font-size: .8rem;
+            z-index: 50;
+            white-space: pre-line;
+            max-width: 320px;
+        }
+    </style>
+</head>
+<body>
+<div class="sidebar">
+    <h2>Day 12: Shape Packing (Backtracking)</h2>
+
+    <div>
+        <label for="inputData">Input (Shapes then Regions)</label>
+        <textarea id="inputData"></textarea>
+        <button style="width:100%; margin-top:6px" onclick="loadFromText()">Load</button>
+    </div>
+
+    <div class="row">
+        <div>
+            <label for="regionSelect">Region</label>
+            <select id="regionSelect" onchange="selectRegion()"></select>
+        </div>
+        <div>
+            <label for="seedVal">Shuffle seed</label>
+            <input id="seedVal" type="number" value="1" min="0" step="1" onchange="rebuildSolver()" />
+        </div>
+    </div>
+
+    <div class="row">
+        <div>
+            <label>Auto cycle regions</label>
+            <label style="cursor:pointer; color:white; display:flex; gap:8px; align-items:center;">
+                <input type="checkbox" id="autoCycleChk" onchange="setAutoCycle()"> Enable
+            </label>
+        </div>
+        <div>
+            <label for="cycleDelayMs">Delay (ms)</label>
+            <input id="cycleDelayMs" type="number" value="900" min="0" step="100" onchange="setAutoCycle()" />
+        </div>
+    </div>
+
+    <div class="stats-panel">
+        <div class="stat-row"><span>Board:</span><span class="stat-val" id="uiBoard">-</span></div>
+        <div class="stat-row"><span>Required area:</span><span class="stat-val val-hl" id="uiReqArea">-</span></div>
+        <div class="stat-row"><span>Placed / Remaining:</span><span class="stat-val" id="uiPlacedRemain">-</span></div>
+        <div class="stat-row"><span>Nodes (DFS):</span><span class="stat-val" id="uiNodes">0</span></div>
+        <div class="stat-row"><span>Status:</span><span class="stat-val" id="uiStatus">Ready</span></div>
+    </div>
+
+    <div class="controls">
+        <button id="btnRun" class="btn-primary" onclick="toggleRun()">Run</button>
+        <button onclick="stepOnce()">Step</button>
+        <button class="btn-danger" onclick="resetAll()">Reset</button>
+        <button onclick="rebuildSolver()">Rebuild</button>
+    </div>
+
+    <div>
+        <label>Simulation speed</label>
+        <input type="range" id="speedRange" min="1" max="60" value="12" />
+    </div>
+
+    <div class="mini">
+        <div><b>How to read this:</b></div>
+        <div>- The solver always targets the first empty cell (top-left scan).</div>
+        <div>- It tries remaining shapes (larger first), all rotations/flips, aligned so one of the shape cells hits the target.</div>
+        <div>- If nothing fits, it can mark the cell as <i>unused</i> (because the pack doesn’t need to fill the whole region).</div>
+    </div>
+
+    <div>
+        <label>Shapes (index / area)</label>
+        <div id="shapeStrip" class="shape-strip"></div>
+    </div>
+</div>
+
+<div class="main-content" id="canvasContainer">
+    <canvas id="mainCanvas"></canvas>
+    <div id="tooltip"></div>
+
+    <div class="overlay-legend">
+        <div class="legend-item"><div class="swatch" style="background:var(--cell-empty)"></div> Empty</div>
+        <div class="legend-item"><div class="swatch" style="background:var(--cell-unused)"></div> Unused</div>
+        <div class="legend-item"><div class="swatch" style="background:var(--highlight)"></div> Target cell</div>
+        <div class="legend-item"><div class="swatch" style="background:rgba(97,175,239,.35)"></div> Candidate placement</div>
+    </div>
+</div>
+
+<script>
+    /* ========= Utilities ========= */
+
+    function mulberry32(seed) {
+        let t = seed >>> 0;
+        return function() {
+            t += 0x6D2B79F5;
+            let x = Math.imul(t ^ (t >>> 15), 1 | t);
+            x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+            return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function key(x,y){ return (x<<16) ^ y; } // good enough for small boards
+
+    /* ========= Parsing (matches Kotlin input format) ========= */
+
+    function parseInput(text) {
+        const lines = text.split(/\r?\n/);
+        const shapesRaw = new Map();
+        let i = 0;
+
+        while (i < lines.length) {
+            const line = lines[i].trim();
+            if (!line) { i++; continue; }
+
+            const m = line.match(/^(\d+):\s*$/);
+            if (m) {
+                const idx = parseInt(m[1], 10);
+                i++;
+                const grid = [];
+                while (i < lines.length && lines[i].trim() !== "") {
+                    grid.push(lines[i].replace(/\r/g, ""));
+                    i++;
+                }
+                shapesRaw.set(idx, grid);
+                continue;
+            }
+            break; // regions start
+        }
+
+        while (i < lines.length && !lines[i].trim()) i++;
+
+        const regions = [];
+        while (i < lines.length) {
+            const line = lines[i].trim();
+            if (!line) { i++; continue; }
+            const m = line.match(/^(\d+)x(\d+):\s+(.+)$/);
+            if (m) {
+                const w = parseInt(m[1], 10);
+                const h = parseInt(m[2], 10);
+                const counts = m[3].trim().split(/\s+/).map(s => parseInt(s,10));
+                const shapeCounts = [];
+                counts.forEach((c, idx) => { if (c > 0) shapeCounts.push({shapeIndex: idx, count: c}); });
+                regions.push({width:w, height:h, counts:shapeCounts, rawCounts: counts});
+            }
+            i++;
+        }
+
+        // Build figures sorted by index (0..)
+        const indices = Array.from(shapesRaw.keys()).sort((a,b)=>a-b);
+        const figures = indices.map(idx => {
+            const grid = shapesRaw.get(idx);
+            const cells = [];
+            for (let y=0; y<grid.length; y++) {
+                for (let x=0; x<grid[y].length; x++) {
+                    if (grid[y][x] === '#') cells.push({x,y});
+                }
+            }
+            const norm = normalize(cells);
+            return {
+                index: idx,
+                area: norm.length,
+                cells: norm,
+                w: 1 + Math.max(...norm.map(p=>p.x)),
+                h: 1 + Math.max(...norm.map(p=>p.y)),
+                permutations: null
+            };
+        });
+
+        // compute permutations
+        figures.forEach(fig => fig.permutations = computePermutations(fig));
+
+        return { figures, regions };
+    }
+
+    function normalize(points) {
+        let minX = Infinity, minY = Infinity;
+        points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); });
+        const out = points.map(p => ({x: p.x - minX, y: p.y - minY}));
+        out.sort((a,b)=> (a.y-b.y) || (a.x-b.x));
+        return out;
+    }
+
+    function rotate(p){ return {x: -p.y, y: p.x}; }
+    function flipX(p){ return {x: -p.x, y: p.y}; }
+
+    function computePermutations(fig) {
+        const variants = new Map(); // key -> cells
+        let current = fig.cells.map(p => ({...p}));
+        for (let r=0; r<4; r++) {
+            const n1 = normalize(current);
+            variants.set(cellsKey(n1), n1);
+
+            const flipped = normalize(current.map(flipX));
+            variants.set(cellsKey(flipped), flipped);
+
+            current = current.map(rotate);
+        }
+
+        return Array.from(variants.values()).map(cells => {
+            const w = 1 + Math.max(...cells.map(p=>p.x));
+            const h = 1 + Math.max(...cells.map(p=>p.y));
+            return {
+                index: fig.index,
+                area: cells.length,
+                cells,
+                w, h
+            };
+        });
+    }
+
+    function cellsKey(cells) {
+        return cells.map(p => `${p.x},${p.y}`).join(";");
+    }
+
+    /* ========= Visualization state ========= */
+
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvasContainer');
+    const tooltip = document.getElementById('tooltip');
+
+    let data = null;
+    let selectedRegionIndex = 0;
+
+    let view = { scale: 1, x: 0, y: 0 };
+    let isPanning = false;
+    let lastMouse = {x:0,y:0};
+
+    let isRunning = false;
+    let raf = null;
+
+    // Auto-cycle between regions
+    let autoCycleEnabled = false;
+    let autoCycleDelayMs = 900;
+    let pendingCycleTimeout = null;
+
+    /* Solver state (iterative DFS) */
+    let solver = null;
+
+    function resize() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+    }
+    window.addEventListener('resize', resize);
+
+    /* ========= Colors ========= */
+
+    function shapeColor(idx) {
+        // pleasant repeating palette
+        const palette = [
+            "#61afef", "#98c379", "#e5c07b", "#c678dd", "#e06c75",
+            "#56b6c2", "#d19a66", "#be5046", "#7f848e", "#8abeb7"
+        ];
+        return palette[idx % palette.length];
+    }
+
+    /* ========= Board helpers ========= */
+
+    function makeBoard(w,h) {
+        return {
+            w, h,
+            // cell states: 0 empty, -1 unused, >0 = shapeId+1
+            cells: new Int16Array(w*h),
+            idx(x,y){ return y*w + x; },
+            get(x,y){ return this.cells[this.idx(x,y)]; },
+            set(x,y,v){ this.cells[this.idx(x,y)] = v; },
+        };
+    }
+
+    function firstEmptyCell(board) {
+        for (let y=0; y<board.h; y++) {
+            for (let x=0; x<board.w; x++) {
+                if (board.get(x,y) === 0) return {x,y};
+            }
+        }
+        return null;
+    }
+
+    function canPlace(board, perm, dx, dy) {
+        for (const p of perm.cells) {
+            const x = p.x + dx, y = p.y + dy;
+            if (x < 0 || y < 0 || x >= board.w || y >= board.h) return false;
+            if (board.get(x,y) !== 0) return false;
+        }
+        return true;
+    }
+
+    function doPlace(board, perm, dx, dy, markerVal) {
+        for (const p of perm.cells) {
+            board.set(p.x + dx, p.y + dy, markerVal);
+        }
+    }
+
+    /* ========= Solver (step-able DFS) ========= */
+
+    function buildSolver(figures, region, seed) {
+        const board = makeBoard(region.width, region.height);
+
+        const counts = new Map();
+        region.counts.forEach(sc => counts.set(sc.shapeIndex, sc.count));
+
+        const totalRequiredArea = region.counts.reduce((acc, sc) => acc + figures[sc.shapeIndex].area * sc.count, 0);
+
+        // order shapes by area desc (like Kotlin)
+        let order = region.counts.map(sc => sc.shapeIndex)
+            .sort((a,b) => figures[b].area - figures[a].area);
+
+        // optional small shuffle (deterministic) to vary search
+        const rng = mulberry32(seed >>> 0);
+        for (let i=order.length-1; i>0; i--) {
+            const j = Math.floor(rng() * (i+1));
+            const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+        }
+        // then keep big-first bias by stable sort on area with tiny shuffle tie-break
+        order = order.sort((a,b) => {
+            const da = figures[b].area - figures[a].area;
+            if (da !== 0) return da;
+            return (a-b);
+        });
+
+        const initial = {
+            board,
+            counts,
+            order,
+            remainingArea: totalRequiredArea,
+            nodes: 0,
+            status: "Ready",
+            solved: false,
+            failed: false,
+            target: null,
+            candidate: null, // preview placement
+            // explicit stack frames for DFS
+            stack: []
+        };
+
+        function pushFrame() {
+            const t = firstEmptyCell(initial.board);
+            initial.target = t;
+            if (!t) return;
+
+            initial.stack.push({
+                phase: "TRY_SHAPES",
+                shapePos: 0,
+                permPos: 0,
+                anchorPos: 0,
+                placed: null,
+                didUnused: false,
+                target: {x: t.x, y: t.y}
+            });
+        }
+
+        pushFrame();
+
+        function allUsedUp() {
+            for (const shapeIdx of initial.order) {
+                if ((initial.counts.get(shapeIdx) || 0) > 0) return false;
+            }
+            return true;
+        }
+
+        function stepOne() {
+            if (initial.solved || initial.failed) return;
+
+            initial.nodes++;
+
+            if (allUsedUp()) {
+                initial.solved = true;
+                initial.status = "Solved!";
+                initial.candidate = null;
+                initial.target = null;
+                return;
+            }
+
+            const emptyCells = initial.board.w * initial.board.h - countNonZero(initial.board);
+            if (initial.remainingArea > emptyCells) {
+                if (!backtrack()) {
+                    initial.failed = true;
+                    initial.status = "No solution (for this region / order)";
+                }
+                return;
+            }
+
+            if (initial.stack.length === 0) {
+                initial.failed = true;
+                initial.status = "No solution";
+                return;
+            }
+
+            const frame = initial.stack[initial.stack.length - 1];
+            const t = frame.target;
+            initial.target = t;
+
+            if (initial.board.get(t.x, t.y) !== 0) {
+                initial.stack.pop();
+                pushFrame();
+                initial.candidate = null;
+                return;
+            }
+
+            initial.candidate = null;
+
+            if (frame.phase === "TRY_SHAPES") {
+                const placed = tryNextPlacement(frame);
+                if (placed) {
+                    doPlace(initial.board, placed.perm, placed.dx, placed.dy, placed.markerVal);
+                    initial.counts.set(placed.shapeIdx, (initial.counts.get(placed.shapeIdx) || 0) - 1);
+                    initial.remainingArea -= placed.area;
+
+                    frame.placed = placed;
+                    frame.phase = "AFTER_PLACEMENT";
+
+                    pushFrame();
+                    return;
+                }
+
+                if (!frame.didUnused) {
+                    frame.didUnused = true;
+                    initial.board.set(t.x, t.y, -1);
+                    frame.phase = "AFTER_UNUSED";
+                    pushFrame();
+                    return;
+                }
+
+                if (!backtrack()) {
+                    initial.failed = true;
+                    initial.status = "No solution";
+                }
+                return;
+            }
+
+            if (!backtrack()) {
+                initial.failed = true;
+                initial.status = "No solution";
+            }
+        }
+
+        function tryNextPlacement(frame) {
+            const t = frame.target;
+
+            for (; frame.shapePos < initial.order.length; frame.shapePos++) {
+                const shapeIdx = initial.order[frame.shapePos];
+                const remaining = initial.counts.get(shapeIdx) || 0;
+                if (remaining <= 0) continue;
+
+                const fig = figures[shapeIdx];
+                const perms = fig.permutations;
+
+                for (; frame.permPos < perms.length; frame.permPos++) {
+                    const perm = perms[frame.permPos];
+
+                    for (; frame.anchorPos < perm.cells.length; frame.anchorPos++) {
+                        const anchor = perm.cells[frame.anchorPos];
+                        const dx = t.x - anchor.x;
+                        const dy = t.y - anchor.y;
+
+                        if (dx < 0 || dy < 0 || (dx + perm.w) > initial.board.w || (dy + perm.h) > initial.board.h) continue;
+
+                        initial.candidate = { perm, dx, dy, shapeIdx };
+
+                        if (canPlace(initial.board, perm, dx, dy)) {
+                            const markerVal = shapeIdx + 1;
+                            frame.anchorPos++;
+                            return { shapeIdx, perm, dx, dy, markerVal, area: perm.cells.length };
+                        }
+                    }
+
+                    frame.anchorPos = 0;
+                }
+
+                frame.permPos = 0;
+                frame.anchorPos = 0;
+            }
+
+            return null;
+        }
+
+        function backtrack() {
+            while (initial.stack.length > 0) {
+                const frame = initial.stack.pop();
+
+                if (frame.phase === "AFTER_PLACEMENT" && frame.placed) {
+                    const pl = frame.placed;
+                    doPlace(initial.board, pl.perm, pl.dx, pl.dy, 0);
+                    initial.counts.set(pl.shapeIdx, (initial.counts.get(pl.shapeIdx) || 0) + 1);
+                    initial.remainingArea += pl.area;
+
+                    frame.placed = null;
+                    frame.phase = "TRY_SHAPES";
+                    initial.stack.push(frame);
+                    return true;
+                }
+
+                if (frame.phase === "AFTER_UNUSED") {
+                    initial.board.set(frame.target.x, frame.target.y, 0);
+                    continue;
+                }
+            }
+            return false;
+        }
+
+        function countNonZero(board) {
+            let c = 0;
+            for (let i=0; i<board.cells.length; i++) if (board.cells[i] !== 0) c++;
+            return c;
+        }
+
+        initial.status = "Ready";
+        return { state: initial, stepOne };
+    }
+
+    /* ========= UI wiring ========= */
+
+    function setStatus(text, cls) {
+        const el = document.getElementById('uiStatus');
+        el.textContent = text;
+        el.className = "stat-val " + (cls || "");
+    }
+
+    function updateStats() {
+        if (!solver) return;
+        const s = solver.state;
+
+        document.getElementById('uiBoard').textContent = `${s.board.w}×${s.board.h}`;
+        document.getElementById('uiReqArea').textContent = `${s.remainingArea} remaining`;
+        document.getElementById('uiNodes').textContent = `${s.nodes}`;
+
+        const placedCells = countPlacedCells(s.board);
+        const unusedCells = countUnusedCells(s.board);
+        const emptyCells = s.board.w*s.board.h - placedCells - unusedCells;
+        document.getElementById('uiPlacedRemain').textContent =
+            `${placedCells} placed, ${unusedCells} unused, ${emptyCells} empty`;
+
+        if (s.solved) setStatus("Solved!", "val-ok");
+        else if (s.failed) setStatus("No solution", "val-bad");
+        else setStatus(s.status || "Ready", "");
+    }
+
+    function countPlacedCells(board) {
+        let c = 0;
+        for (let i=0;i<board.cells.length;i++) if (board.cells[i] > 0) c++;
+        return c;
+    }
+    function countUnusedCells(board) {
+        let c = 0;
+        for (let i=0;i<board.cells.length;i++) if (board.cells[i] === -1) c++;
+        return c;
+    }
+
+    function rebuildRegionSelect() {
+        const sel = document.getElementById('regionSelect');
+        sel.innerHTML = "";
+        data.regions.forEach((r, idx) => {
+            const req = r.counts.reduce((acc, sc) => acc + data.figures[sc.shapeIndex].area * sc.count, 0);
+            const opt = document.createElement('option');
+            opt.value = String(idx);
+            opt.textContent = `${idx+1}. ${r.width}×${r.height}  (req area ${req})`;
+            sel.appendChild(opt);
+        });
+        sel.value = String(clamp(selectedRegionIndex, 0, data.regions.length-1));
+    }
+
+    function renderShapesStrip() {
+        const strip = document.getElementById('shapeStrip');
+        strip.innerHTML = "";
+        data.figures.forEach(fig => {
+            const card = document.createElement('div');
+            card.className = "shape-card";
+
+            const title = document.createElement('div');
+            title.className = "shape-title";
+            title.innerHTML = `<span>#${fig.index}</span><span>${fig.area}</span>`;
+            card.appendChild(title);
+
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("class", "shape-svg");
+            svg.setAttribute("viewBox", "0 0 64 48");
+
+            const cell = 12;
+            const pad = 6;
+            fig.cells.forEach(p => {
+                const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                r.setAttribute("x", String(pad + p.x*cell));
+                r.setAttribute("y", String(pad + p.y*cell));
+                r.setAttribute("width", String(cell-2));
+                r.setAttribute("height", String(cell-2));
+                r.setAttribute("rx", "2");
+                r.setAttribute("fill", shapeColor(fig.index));
+                r.setAttribute("opacity", "0.9");
+                svg.appendChild(r);
+            });
+
+            card.appendChild(svg);
+            strip.appendChild(card);
+        });
+    }
+
+    function selectRegion() {
+        selectedRegionIndex = parseInt(document.getElementById('regionSelect').value, 10) || 0;
+        cancelPendingCycle();
+        rebuildSolver();
+    }
+
+    function setAutoCycle() {
+        autoCycleEnabled = !!document.getElementById('autoCycleChk').checked;
+        autoCycleDelayMs = Math.max(0, parseInt(document.getElementById('cycleDelayMs').value, 10) || 0);
+        if (!autoCycleEnabled) cancelPendingCycle();
+        // If enabling while idle/finished, immediately start running on current region.
+        if (autoCycleEnabled && solver && !isRunning && !solver.state.solved && !solver.state.failed) {
+            isRunning = true;
+            const btn = document.getElementById('btnRun');
+            btn.textContent = "Pause";
+            btn.classList.add('btn-danger');
+        }
+    }
+
+    function cancelPendingCycle() {
+        if (pendingCycleTimeout !== null) {
+            clearTimeout(pendingCycleTimeout);
+            pendingCycleTimeout = null;
+        }
+    }
+
+    function cycleToNextRegionAndRun() {
+        if (!data || data.regions.length === 0) return;
+
+        selectedRegionIndex = (selectedRegionIndex + 1) % data.regions.length;
+        document.getElementById('regionSelect').value = String(selectedRegionIndex);
+        rebuildSolver();
+
+        // Auto-run immediately after switch
+        isRunning = true;
+        const btn = document.getElementById('btnRun');
+        btn.textContent = "Pause";
+        btn.classList.add('btn-danger');
+    }
+
+    function rebuildSolver() {
+        if (!data || data.regions.length === 0) return;
+        const region = data.regions[selectedRegionIndex];
+        const seed = parseInt(document.getElementById('seedVal').value, 10) || 0;
+        solver = buildSolver(data.figures, region, seed);
+
+        cancelPendingCycle();
+
+        isRunning = false;
+        document.getElementById('btnRun').textContent = "Run";
+        document.getElementById('btnRun').classList.remove('btn-danger');
+
+        updateAutoFitView();
+        updateStats();
+        draw();
+    }
+
+    function resetAll() {
+        cancelPendingCycle();
+        rebuildSolver();
+    }
+
+    function stepOnce() {
+        if (!solver) return;
+        cancelPendingCycle();
+        solver.stepOne();
+        updateStats();
+        draw();
+    }
+
+    function toggleRun() {
+        if (!solver) return;
+        cancelPendingCycle();
+        isRunning = !isRunning;
+        const btn = document.getElementById('btnRun');
+        if (isRunning) {
+            btn.textContent = "Pause";
+            btn.classList.add('btn-danger');
+        } else {
+            btn.textContent = "Run";
+            btn.classList.remove('btn-danger');
+        }
+    }
+
+    /* ========= Drawing ========= */
+
+    function updateAutoFitView() {
+        if (!solver) return;
+        const b = solver.state.board;
+
+        const margin = 30;
+        const cellSizeX = (canvas.width - margin*2) / b.w;
+        const cellSizeY = (canvas.height - margin*2) / b.h;
+        const cellSize = Math.floor(Math.max(6, Math.min(cellSizeX, cellSizeY)));
+
+        view.scale = cellSize;
+        view.x = Math.floor((canvas.width - b.w * view.scale) / 2);
+        view.y = Math.floor((canvas.height - b.h * view.scale) / 2);
+    }
+
+    function draw() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = "#111";
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+
+        if (!solver) return;
+        const s = solver.state;
+        const b = s.board;
+
+        const cs = view.scale;
+        const ox = view.x;
+        const oy = view.y;
+
+        for (let y=0;y<b.h;y++){
+            for (let x=0;x<b.w;x++){
+                const v = b.get(x,y);
+
+                let fill = getComputedStyle(document.documentElement).getPropertyValue('--cell-empty').trim();
+                if (v === -1) fill = getComputedStyle(document.documentElement).getPropertyValue('--cell-unused').trim();
+                if (v > 0) fill = shapeColor(v-1);
+
+                ctx.fillStyle = fill;
+                ctx.fillRect(ox + x*cs, oy + y*cs, cs, cs);
+
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid').trim();
+                ctx.lineWidth = 1;
+                ctx.strokeRect(ox + x*cs + 0.5, oy + y*cs + 0.5, cs, cs);
+            }
+        }
+
+        if (s.candidate && !s.solved && !s.failed) {
+            const {perm, dx, dy, shapeIdx} = s.candidate;
+            ctx.fillStyle = "rgba(97,175,239,0.25)";
+            for (const p of perm.cells) {
+                const x = p.x + dx, y = p.y + dy;
+                if (x>=0 && y>=0 && x<b.w && y<b.h) {
+                    ctx.fillRect(ox + x*cs, oy + y*cs, cs, cs);
+                }
+            }
+            ctx.strokeStyle = "rgba(97,175,239,0.9)";
+            ctx.lineWidth = Math.max(1, Math.floor(cs*0.08));
+            for (const p of perm.cells) {
+                const x = p.x + dx, y = p.y + dy;
+                if (x>=0 && y>=0 && x<b.w && y<b.h) {
+                    ctx.strokeRect(ox + x*cs + 1, oy + y*cs + 1, cs-2, cs-2);
+                }
+            }
+            ctx.fillStyle = "#ddd";
+            ctx.font = `${Math.max(12, Math.floor(cs*0.45))}px monospace`;
+            ctx.fillText(`try #${shapeIdx}`, ox + 6, oy - 10);
+        }
+
+        if (s.target && !s.solved && !s.failed) {
+            const t = s.target;
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--highlight').trim();
+            ctx.lineWidth = Math.max(2, Math.floor(cs*0.12));
+            ctx.strokeRect(ox + t.x*cs + 2, oy + t.y*cs + 2, cs-4, cs-4);
+        }
+    }
+
+    function screenToCell(mx, my) {
+        if (!solver) return null;
+        const b = solver.state.board;
+        const cs = view.scale;
+        const x = Math.floor((mx - view.x) / cs);
+        const y = Math.floor((my - view.y) / cs);
+        if (x < 0 || y < 0 || x >= b.w || y >= b.h) return null;
+        return {x,y};
+    }
+
+    /* ========= Interaction (tooltip + pan/zoom) ========= */
+
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        if (isPanning) {
+            view.x += (mx - lastMouse.x);
+            view.y += (my - lastMouse.y);
+            lastMouse = {x:mx, y:my};
+            draw();
+            return;
+        }
+
+        const cell = screenToCell(mx, my);
+        if (!cell || !solver) {
+            tooltip.style.display = "none";
+            return;
+        }
+
+        const v = solver.state.board.get(cell.x, cell.y);
+        let txt = `Cell: (${cell.x}, ${cell.y})\n`;
+        if (v === 0) txt += `State: empty`;
+        else if (v === -1) txt += `State: unused`;
+        else txt += `State: shape #${v-1}`;
+
+        tooltip.textContent = txt;
+        tooltip.style.display = "block";
+        tooltip.style.left = (e.clientX + 12) + "px";
+        tooltip.style.top = (e.clientY + 12) + "px";
+    });
+
+    canvas.addEventListener('mouseleave', () => tooltip.style.display = "none");
+
+    canvas.addEventListener('mousedown', (e) => {
+        isPanning = true;
+        lastMouse = {x: e.offsetX, y: e.offsetY};
+    });
+    window.addEventListener('mouseup', () => { isPanning = false; });
+
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        const factor = 1 - Math.sign(e.deltaY) * 0.1;
+        const newScale = clamp(view.scale * factor, 6, 80);
+
+        const wx = (mx - view.x) / view.scale;
+        const wy = (my - view.y) / view.scale;
+
+        view.scale = newScale;
+        view.x = mx - wx * view.scale;
+        view.y = my - wy * view.scale;
+
+        draw();
+    }, { passive: false });
+
+    /* ========= Main loop ========= */
+
+    function loop() {
+        if (solver && isRunning) {
+            const speed = parseInt(document.getElementById('speedRange').value, 10) || 10;
+
+            let steps = 1;
+            if (speed <= 10) steps = 1;
+            else if (speed <= 25) steps = 2;
+            else if (speed <= 40) steps = 4;
+            else steps = 8;
+
+            for (let k=0; k<steps; k++) {
+                solver.stepOne();
+                if (solver.state.solved || solver.state.failed) {
+                    isRunning = false;
+                    const btn = document.getElementById('btnRun');
+                    btn.textContent = "Run";
+                    btn.classList.remove('btn-danger');
+
+                    if (autoCycleEnabled && pendingCycleTimeout === null) {
+                        pendingCycleTimeout = setTimeout(() => {
+                            pendingCycleTimeout = null;
+                            if (!autoCycleEnabled) return;
+                            cycleToNextRegionAndRun();
+                        }, autoCycleDelayMs);
+                    }
+                    break;
+                }
+            }
+            updateStats();
+            draw();
+        }
+        raf = requestAnimationFrame(loop);
+    }
+
+    /* ========= Boot ========= */
+
+    function setDefaultInput() {
+        document.getElementById('inputData').value =
+            `0:
+###
+##.
+##.
+
+1:
+###
+##.
+.##
+
+2:
+.##
+###
+##.
+
+3:
+##.
+###
+##.
+
+4:
+###
+#..
+###
+
+5:
+###
+.#.
+###
+
+4x4: 0 0 0 0 2 0
+12x5: 1 0 1 0 2 2
+12x5: 1 0 1 0 3 2
+`;
+    }
+
+    function loadFromText() {
+        cancelPendingCycle();
+        const text = document.getElementById('inputData').value;
+        data = parseInput(text);
+
+        selectedRegionIndex = 0;
+        rebuildRegionSelect();
+        renderShapesStrip();
+        rebuildSolver();
+    }
+
+    window.onload = () => {
+        resize();
+        setDefaultInput();
+        loadFromText();
+        setAutoCycle();
+        loop();
+    };
+</script>
+</body>
+</html>
